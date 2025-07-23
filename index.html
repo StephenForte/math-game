@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Multiplication Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧮 Math Multiplication Game</h1>
+            <p>Test your multiplication skills with random problems!</p>
+        </header>
+
+        <main>
+            <div id="start-screen" class="screen active">
+                <div class="card">
+                    <h2>Ready to Practice?</h2>
+                    <p>You'll get 30 seconds to solve each multiplication problem from the 1-10 times tables.</p>
+                    <div class="name-input-section">
+                        <label for="player-name">Enter your name:</label>
+                        <input type="text" id="player-name" placeholder="Your name" maxlength="20" autocomplete="off">
+                    </div>
+                    <button id="start-btn" class="btn btn-primary">Start Game</button>
+                </div>
+            </div>
+
+            <div id="game-screen" class="screen">
+                <div class="card">
+                    <div class="game-header">
+                        <div class="player-info">
+                            <span id="player-display">Player</span>
+                        </div>
+                        <div class="problem-counter">
+                            Problem <span id="current-problem">1</span>/10
+                        </div>
+                        <div class="timer">
+                            <span id="time-left">30</span>s
+                        </div>
+                        <div class="score">
+                            Score: <span id="score">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="game-controls">
+                        <button id="pause-btn" class="btn btn-secondary">⏸️ Pause</button>
+                        <button id="finish-btn" class="btn btn-warning">🏁 Finish</button>
+                    </div>
+
+                    <div class="problem-container">
+                        <div class="problem">
+                            <span id="num1">?</span> × <span id="num2">?</span> = ?
+                        </div>
+                    </div>
+
+                    <div class="answer-section">
+                        <input type="number" id="answer-input" placeholder="Enter your answer" autocomplete="off">
+                        <button id="submit-btn" class="btn btn-primary">Submit Answer</button>
+                    </div>
+
+                    <div id="feedback" class="feedback"></div>
+                </div>
+            </div>
+
+            <div id="result-screen" class="screen">
+                <div class="card">
+                    <h2 id="result-title">Game Over!</h2>
+                    <div class="result-stats">
+                        <p>Player: <span id="final-player-name">Player</span></p>
+                        <p>Final Score: <span id="final-score">0</span></p>
+                        <p>Problems Solved: <span id="problems-solved">0</span></p>
+                        <p>Accuracy: <span id="accuracy">0%</span></p>
+                        <p>Total Time: <span id="total-time">0.0s</span></p>
+                        <p>Average Time per Problem: <span id="average-time">0.0s</span></p>
+                    </div>
+                    <div class="result-actions">
+                        <button id="play-again-btn" class="btn btn-primary">Play Again</button>
+                        <button id="back-to-menu-btn" class="btn btn-secondary">Back to Menu</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
