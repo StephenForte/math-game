@@ -1,68 +1,64 @@
-# 🧮 Math Multiplication Game
+# 🧮 Math Practice Lab
 
-A fun and interactive web-based multiplication game designed to help practice multiplication skills from the 1-10 times tables.
+A friendly, browser-based collection of short math quizzes. The app currently includes three practice modules:
 
-## 🎮 How to Play
+1. **Times Table Practice** — ten multiplication questions using the 2–12 facts, with 30 seconds per question.
+2. **Fluency Sprint** — twelve mixed multiplication and exact-division facts using factors 2–12, with a focused 15-second pace.
+3. **Fraction Equivalence Lab** — eight untimed questions that use fraction bars and number lines to make equivalent amounts visible.
+4. **Place Value & Rounding** — the legacy twenty-question challenge covering place values from millions through thousandths plus rounding to whole numbers, tenths, and hundredths.
+5. **Geometry Lab** — the legacy ten-question challenge covering polygons, lines, rays, line segments, and angles in capital letters.
 
-1. **Enter Your Name**: Type your name in the input field (required to start)
-2. **Start the Game**: Click the "Start Game" button or press Enter to begin
-3. **Solve Problems**: You'll be presented with random multiplication problems from 1×1 to 10×10
-4. **Problem Limit**: Complete 10 problems to finish the game (30 seconds per problem)
-5. **Scoring**: Each correct answer earns you 10 points
-6. **Feedback**: Get immediate feedback on whether your answer is correct or incorrect
-7. **Results**: See your final score, problems solved, and accuracy at the end
+## How to run
 
-## 🚀 Features
+Open `index.html` in a modern browser. No installation or build step is required.
 
-- **Random Problems**: Each game generates random multiplication problems from 1-10 times tables
-- **30-Second Timer**: Countdown timer with visual warning when time is running low
-- **10-Problem Limit**: Game ends after completing 10 multiplication problems
-- **Player Names**: Personalize the game with your name
-- **Pause/Resume**: Pause the game at any time and resume when ready
-- **Finish Early**: End the game early with confirmation dialog
-- **Real-time Scoring**: Track your score as you play
-- **Immediate Feedback**: Know instantly if your answer is correct
-- **Performance Tracking**: See your final score, problems solved, accuracy percentage, total time, and average time per problem
-- **Responsive Design**: Works on desktop, tablet, and mobile devices
-- **Modern UI**: Beautiful gradient design with smooth animations
+For a local server, run:
 
-## 🛠️ How to Run
+```sh
+python3 -m http.server 8000
+```
 
-1. **Download/Clone**: Get all the files in this directory
-2. **Open in Browser**: Simply open `index.html` in any modern web browser
-3. **No Installation Required**: This is a pure HTML/CSS/JavaScript application
+Then visit `http://localhost:8000`.
 
-## 📁 Files Included
+## How to play
 
-- `index.html` - Main HTML structure
-- `styles.css` - Modern styling and responsive design
-- `script.js` - Game logic and functionality
-- `README.md` - This documentation
+1. Enter the learner's name.
+2. Choose a practice module.
+3. Answer each question and use the immediate feedback to adjust.
+4. Pause or finish a session at any time.
+5. Review the final score, accuracy, and timing summary.
 
-## 🎯 Game Mechanics
+## Design notes
 
-- **Problem Generation**: Randomly selects two numbers between 1 and 10
-- **Timer**: 30-second countdown with visual indicators (pauses when game is paused)
-- **Problem Counter**: Track progress through 10 problems
-- **Pause System**: Temporarily stops timer and disables input
-- **Early Finish**: Option to end game before timer expires
-- **Scoring System**: 10 points per correct answer
-- **Accuracy Calculation**: Based on problems solved vs. total attempts
-- **Performance Feedback**: Different messages based on final score
+- Timed questions advance cleanly when time expires and count as attempts.
+- The two legacy modules preserve their shared three-minute overall timer; the earlier modules retain their per-question or untimed pacing.
+- A cheerful poop mascot gains stars at question 2, hearts at question 8, and transforms into a brain at completion. This is serious pedagogy.
+- Finishing a quiz triggers a fireworks celebration.
+- The finish screen reviews every answered question, including the correct answer and any incorrect choice or timeout.
+- The fraction module is intentionally untimed so the learner can reason from the visual model.
+- Fraction choices show both the written fraction and a shaded bar, reinforcing amount rather than a memorized numerator/denominator rule.
+- Quiz metadata and problem generators live in the `QUIZ_MODULES` configuration at the top of `script.js`. This is the first step toward loading plug-and-play module definitions from Markdown later.
+- Keyboard input, visible focus states, reduced-motion support, and responsive layouts are included.
+- The opening screen uses a colorful, preteen-friendly “math mission” theme without changing the focused quiz interface.
+- Times Table Practice uses factors 2–12 while limiting factors 10 and 11 to one appearance each per session.
 
-## 🎨 Design Features
+## Google Sheets result logging
 
-- **Gradient Background**: Beautiful purple gradient theme
-- **Card-based Layout**: Clean, modern card design
-- **Smooth Animations**: Fade-in effects and hover animations
-- **Responsive**: Adapts to different screen sizes
-- **Accessibility**: Keyboard support (Enter key to submit answers)
+Every completed or early-finished session is queued in the browser and sent to Google Sheets when an endpoint is configured. If the network is unavailable, up to 25 results remain queued and are retried on a later visit.
 
-## 🏆 Performance Levels
+For compatibility with existing Apps Script deployments, the learner's name is sent as `playerName` and through the legacy aliases `name`, `player`, and `studentName`.
 
-- **50+ Points**: "Excellent Work! 🏆"
-- **30-49 Points**: "Good Job! 👍"
-- **10-29 Points**: "Keep Practicing! 💪"
-- **0-9 Points**: "Don't Give Up! 📚"
+1. Open the target Google Sheet and choose **Extensions → Apps Script**.
+2. Paste in `google-apps-script.gs` and deploy it as a web app that executes as you and is accessible to anyone using the game.
+3. Paste the deployment URL into `googleSheetsEndpoint` in `config.js`.
 
-Enjoy practicing your multiplication skills! 🎉 
+The repository did not contain the previous endpoint or logging schema, so `config.js` intentionally leaves the deployment URL blank rather than guessing it.
+
+## Project files
+
+- `index.html` — module picker, shared quiz interface, and results screen
+- `script.js` — shared quiz engine and module-specific problem generators
+- `config.js` — Google Sheets endpoint configuration
+- `google-apps-script.gs` — Sheet-bound result logger for Apps Script
+- `styles.css` — responsive styling and visual math models
+- `README.md` — project overview and usage
