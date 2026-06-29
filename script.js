@@ -1,131 +1,476 @@
-const QUIZ_MODULES = {
-    multiplication: {
-        title: 'Times Table Practice',
-        icon: '✖️',
-        maxProblems: 10,
-        timeLimit: 30,
-        inputType: 'number',
-        generateProblem(moduleState) {
-            const factors = Array.from({ length: 11 }, (_, index) => index + 2);
-            const availableFactors = factors.filter(factor =>
-                ![10, 11].includes(factor) || !moduleState.usedRestrictedFactors.has(factor)
-            );
-            const left = randomItem(availableFactors);
-            const rightChoices = [10, 11].includes(left)
-                ? availableFactors.filter(factor => factor !== left)
-                : availableFactors;
-            const right = randomItem(rightChoices);
+// Math Practice Lab
+//
+// Quizzes are defined as Markdown files in the `quizzes/` folder. Each file holds
+// a fenced ```json config block with its tunable rules (difficulty, timing,
+// question counts, etc.). The manifest lists which quizzes load and in what
+// order. This file provides the shared quiz engine plus a small set of generic
+// "generator" engines that the Markdown configs select and parameterize.
 
-            if ([10, 11].includes(left)) moduleState.usedRestrictedFactors.add(left);
-            if ([10, 11].includes(right)) moduleState.usedRestrictedFactors.add(right);
-            return {
-                answer: left * right,
-                answerLabel: String(left * right),
-                questionText: `${left} × ${right} = ?`,
-                promptHtml: `<div class="problem arithmetic-problem"><span>${left}</span> × <span>${right}</span> = ?</div>`
-            };
-        }
-    },
-    fluency: {
-        title: 'Fluency Sprint',
-        icon: '⚡',
-        maxProblems: 12,
-        timeLimit: 15,
-        inputType: 'number',
-        generateProblem() {
-            const left = randomInt(2, 12);
-            const right = randomInt(2, 12);
-            const isDivision = Math.random() < 0.5;
+const QUIZZES_PATH = 'quizzes';
+const MANIFEST_FILE = 'manifest.md';
 
-            if (isDivision) {
-                const dividend = left * right;
-                return {
-                    answer: left,
-                    answerLabel: String(left),
-                    questionText: `${dividend} ÷ ${right} = ?`,
-                    promptHtml: `<p class="problem-instruction">Recall the related fact—no remainder here.</p><div class="problem arithmetic-problem"><span>${dividend}</span> ÷ <span>${right}</span> = ?</div>`
-                };
-            }
+const DEFAULT_CORRECT_FEEDBACK = [
+    'Super! You nailed it. 🎉',
+    'Yes! Beautiful work. ⭐',
+    'Excellent! Keep that momentum. 🚀'
+];
 
-            return {
-                answer: left * right,
-                answerLabel: String(left * right),
-                questionText: `${left} × ${right} = ?`,
-                promptHtml: `<p class="problem-instruction">Answer from memory if you can.</p><div class="problem arithmetic-problem"><span>${left}</span> × <span>${right}</span> = ?</div>`
-            };
-        }
-    },
-    fractions: {
-        title: 'Fraction Equivalence Lab',
-        icon: '🟰',
-        maxProblems: 8,
-        timeLimit: null,
-        inputType: 'choice',
-        generateProblem() {
-            return generateFractionProblem();
-        }
-    },
-    decimals: {
-        title: 'Place Value & Rounding',
-        icon: '🔢',
-        maxProblems: 20,
-        timeLimit: null,
-        overallTimeLimit: 180,
-        inputType: 'choice',
-        generateProblem(moduleState) {
-            if (!moduleState.deck) moduleState.deck = buildDecimalDeck();
-            const question = moduleState.deck.shift();
-            return question.kind === 'place-value'
-                ? generatePlaceValueProblem(question.type)
-                : generateRoundingProblem(question.roundTo);
-        }
-    },
-    geometry: {
-        title: 'Geometry Lab',
-        icon: '📐',
-        maxProblems: 10,
-        timeLimit: null,
-        overallTimeLimit: 180,
-        inputType: 'choice',
-        generateProblem(moduleState) {
-            if (!moduleState.deck) moduleState.deck = shuffle(GEOMETRY_QUESTIONS);
-            return generateGeometryProblem(moduleState.deck.shift());
-        }
+// ---------------------------------------------------------------------------
+// Shared utilities
+// ---------------------------------------------------------------------------
+
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomItem(items) {
+    return items[randomInt(0, items.length - 1)];
+}
+
+function shuffle(items) {
+    const result = [...items];
+    for (let index = result.length - 1; index > 0; index--) {
+        const target = Math.floor(Math.random() * (index + 1));
+        [result[index], result[target]] = [result[target], result[index]];
     }
-};
+    return result;
+}
 
-const FRACTION_SEEDS = [
+// ---------------------------------------------------------------------------
+// Markdown config loading
+// ---------------------------------------------------------------------------
+
+// Pulls the first ```json (or ```config) fenced code block out of a Markdown
+// string and parses it as JSON.
+function extractConfig(markdown, sourceName) {
+    const match = markdown.match(/```(?:json|config)\s*\n([\s\S]*?)```/);
+    if (!match) {
+        throw new Error(`No \`\`\`json config block found in ${sourceName}.`);
+    }
+    try {
+        return JSON.parse(match[1]);
+    } catch (error) {
+        throw new Error(`Could not parse the config block in ${sourceName}: ${error.message}`);
+    }
+}
+
+async function fetchText(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+        throw new Error(`Request for ${url} failed with status ${response.status}.`);
+    }
+    return response.text();
+}
+
+async function loadModules() {
+    const manifestMarkdown = await fetchText(`${QUIZZES_PATH}/${MANIFEST_FILE}`);
+    const manifest = extractConfig(manifestMarkdown, MANIFEST_FILE);
+    const files = Array.isArray(manifest.quizzes) ? manifest.quizzes : [];
+    if (!files.length) {
+        throw new Error('The quiz manifest does not list any quizzes.');
+    }
+
+    const order = [];
+    const modules = {};
+
+    for (const file of files) {
+        const markdown = await fetchText(`${QUIZZES_PATH}/${file}`);
+        const config = extractConfig(markdown, file);
+        const module = buildModule(config, file);
+        modules[module.id] = module;
+        order.push(module.id);
+    }
+
+    return { modules, order };
+}
+
+// Turns a raw config object from Markdown into a runtime module with a bound
+// problem generator.
+function buildModule(config, file) {
+    if (!config.id) throw new Error(`Quiz config in ${file} is missing an "id".`);
+    if (!config.generator) throw new Error(`Quiz "${config.id}" is missing a "generator".`);
+
+    const engine = ENGINES[config.generator];
+    if (!engine) {
+        throw new Error(`Quiz "${config.id}" uses unknown generator "${config.generator}".`);
+    }
+
+    const inputType = config.inputType || (config.generator === 'arithmetic' ? 'number' : 'choice');
+
+    return {
+        id: config.id,
+        title: config.title || config.id,
+        icon: config.icon || '🧮',
+        description: config.description || '',
+        meta: config.meta || '',
+        maxProblems: config.maxProblems || 10,
+        timeLimit: config.timeLimit ?? null,
+        overallTimeLimit: config.overallTimeLimit ?? null,
+        inputType,
+        correctFeedback: Array.isArray(config.correctFeedback) && config.correctFeedback.length
+            ? config.correctFeedback
+            : DEFAULT_CORRECT_FEEDBACK,
+        config,
+        generateProblem(moduleState) {
+            return engine(config, moduleState);
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Engine: arithmetic (multiplication, division, addition, subtraction)
+// ---------------------------------------------------------------------------
+
+const ARITHMETIC_SIGNS = { multiply: '×', divide: '÷', add: '+', subtract: '−' };
+
+function generateArithmeticProblem(config, moduleState) {
+    const operations = config.operations && config.operations.length ? config.operations : ['multiply'];
+    const operation = randomItem(operations);
+    const rangeA = config.factorA || { min: 2, max: 12 };
+    const rangeB = config.factorB || { min: 2, max: 12 };
+    let a = randomInt(rangeA.min, rangeA.max);
+    let b = randomInt(rangeB.min, rangeB.max);
+
+    let left = a;
+    let right = b;
+    let answer;
+
+    if (operation === 'divide') {
+        // Build from a product so division is always exact (no remainder).
+        left = a * b;
+        right = b === 0 ? 1 : b;
+        answer = right === 0 ? 0 : left / right;
+    } else if (operation === 'add') {
+        answer = a + b;
+    } else if (operation === 'subtract') {
+        if (b > a) [a, b] = [b, a];
+        left = a;
+        right = b;
+        answer = a - b;
+    } else {
+        answer = a * b;
+    }
+
+    const sign = ARITHMETIC_SIGNS[operation] || '×';
+    const instruction = config.instruction
+        ? `<p class="problem-instruction">${config.instruction}</p>`
+        : '';
+
+    return {
+        answer,
+        answerLabel: String(answer),
+        questionText: `${left} ${sign} ${right} = ?`,
+        promptHtml: `${instruction}<div class="problem arithmetic-problem"><span>${left}</span> ${sign} <span>${right}</span> = ?</div>`
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Engine: fractions (equivalence with visual models)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_FRACTION_SEEDS = [
     [1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [4, 5]
 ];
 
-const CORRECT_FEEDBACK = {
-    multiplication: [
-        'Super! You nailed it. 🎉',
-        'Fantastic! That fact is getting strong. 💪',
-        'Yes! Beautiful multiplication. ⭐',
-        'The Force is strong with you. 🌌'
-    ],
-    fluency: [
-        'Super! That fact came back fast. ⚡',
-        'Boom! Instant recall. 🚀',
-        'Excellent! Your math brain is flying. 🌟'
-    ],
-    fractions: [
-        'Super! Those fractions show the same amount. 🌟',
-        'Exactly! Different pieces, equal amount. 🎯',
-        'Wonderful! You saw the equivalence. ✨'
-    ],
-    decimals: [
-        'Super! You found the right place. 🔢',
-        'Exactly right—beautiful number sense! 🎯',
-        'Nice rounding! That number landed perfectly. ⭐'
-    ],
-    geometry: [
-        'Super! Your geometry vision is sharp. 📐',
-        'Exactly! You saw the shape of the idea. ✨',
-        'Great work—geometry power unlocked! 🟢'
-    ]
+function fractionKey(numerator, denominator) {
+    return `${numerator}/${denominator}`;
+}
+
+function fractionBar(numerator, denominator, compact = false) {
+    const segments = Array.from({ length: denominator }, (_, index) =>
+        `<span class="fraction-segment${index < numerator ? ' shaded' : ''}"></span>`
+    ).join('');
+    return `<span class="fraction-bar${compact ? ' compact' : ''}" aria-label="${numerator} out of ${denominator} equal parts shaded">${segments}</span>`;
+}
+
+function numberLine(numerator, denominator) {
+    const ticks = Array.from({ length: denominator + 1 }, (_, index) => {
+        const label = index === 0 ? '0' : index === denominator ? '1' : '';
+        return `<span class="number-line-tick${index === numerator ? ' active' : ''}"><span>${label}</span></span>`;
+    }).join('');
+    return `<div class="number-line" aria-label="Point at ${numerator} over ${denominator} on a number line">${ticks}</div>`;
+}
+
+function generateFractionProblem(config) {
+    const seeds = Array.isArray(config.seeds) && config.seeds.length ? config.seeds : DEFAULT_FRACTION_SEEDS;
+    const maxDenominator = config.maxDenominator || 12;
+    const [numerator, denominator] = seeds[randomInt(0, seeds.length - 1)];
+    const maxMultiplier = Math.max(2, Math.min(4, Math.floor(maxDenominator / denominator)));
+    const multiplier = randomInt(2, maxMultiplier);
+    const equivalent = [numerator * multiplier, denominator * multiplier];
+    const correctKey = fractionKey(...equivalent);
+    const distractorCandidates = [
+        [equivalent[0] + 1, equivalent[1]],
+        [Math.max(1, equivalent[0] - 1), equivalent[1]],
+        [numerator + multiplier, denominator + multiplier],
+        [numerator, denominator * multiplier],
+        [Math.min(equivalent[1] - 1, equivalent[0] + 2), equivalent[1]],
+        [equivalent[0], equivalent[1] + 1],
+        [equivalent[0] + 1, equivalent[1] + 1]
+    ];
+    const seen = new Set([correctKey]);
+    const distractors = [];
+
+    for (const fraction of shuffle(distractorCandidates)) {
+        const key = fractionKey(...fraction);
+        if (fraction[0] > 0 && fraction[0] < fraction[1] && !seen.has(key)) {
+            seen.add(key);
+            distractors.push(fraction);
+        }
+        if (distractors.length === 3) break;
+    }
+
+    const choices = shuffle([equivalent, ...distractors]).map(([choiceNumerator, choiceDenominator]) => ({
+        value: fractionKey(choiceNumerator, choiceDenominator),
+        label: `${choiceNumerator}/${choiceDenominator}`,
+        html: `${fractionBar(choiceNumerator, choiceDenominator, true)}<span class="fraction-label"><span>${choiceNumerator}</span><span>${choiceDenominator}</span></span>`
+    }));
+    const useNumberLine = Math.random() < 0.5;
+    const visual = useNumberLine
+        ? numberLine(numerator, denominator)
+        : fractionBar(numerator, denominator);
+    const modelName = useNumberLine ? 'number line' : 'shaded bar';
+
+    return {
+        answer: correctKey,
+        answerLabel: `${equivalent[0]}/${equivalent[1]}`,
+        questionText: `Which fraction is equivalent to ${numerator}/${denominator}?`,
+        choices,
+        promptHtml: `
+            <p class="problem-instruction">Which fraction names the same amount as this ${modelName}?</p>
+            <div class="fraction-model">
+                ${visual}
+                <span class="fraction-label large"><span>${numerator}</span><span>${denominator}</span></span>
+            </div>
+            <p class="visual-hint">Look at the amount shown, not only the numbers.</p>
+        `
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Engine: decimals (place value & rounding)
+// ---------------------------------------------------------------------------
+
+const PLACE_VALUE_TYPES = [
+    'Millions', 'Hundred-Thousands', 'Ten-Thousands', 'Thousands', 'Hundreds',
+    'Tens', 'Ones', 'Tenths', 'Hundredths', 'Thousandths'
+];
+
+const WHOLE_ONLY_PLACE_VALUES = new Set([
+    'Millions', 'Hundred-Thousands', 'Ten-Thousands', 'Thousands'
+]);
+
+const MIN_DIGITS_FOR_PLACE = {
+    Millions: 7,
+    'Hundred-Thousands': 6,
+    'Ten-Thousands': 5,
+    Thousands: 4,
+    Hundreds: 3,
+    Tens: 2,
+    Ones: 1,
+    Tenths: 1,
+    Hundredths: 1,
+    Thousandths: 1
 };
+
+const ROUNDING_TARGET_NAMES = { whole: 'whole number', tenth: 'tenth', hundredth: 'hundredth' };
+
+function buildDecimalDeck(config) {
+    const places = Array.isArray(config.places) && config.places.length ? config.places : PLACE_VALUE_TYPES;
+    const roundingWeights = config.rounding || { whole: 4, tenth: 3, hundredth: 3 };
+    const roundingTargets = [];
+    for (const [key, count] of Object.entries(roundingWeights)) {
+        const targetName = ROUNDING_TARGET_NAMES[key] || key;
+        for (let index = 0; index < count; index++) roundingTargets.push(targetName);
+    }
+    return shuffle([
+        ...places.map(type => ({ kind: 'place-value', type })),
+        ...roundingTargets.map(roundTo => ({ kind: 'rounding', roundTo }))
+    ]);
+}
+
+function formatNumberWithTarget(fullString, targetIndex) {
+    const decimalIndex = fullString.indexOf('.') === -1 ? fullString.length : fullString.indexOf('.');
+    let html = '';
+    let plain = '';
+    for (let index = 0; index < fullString.length; index++) {
+        const character = fullString[index];
+        if (index > 0 && index < decimalIndex && (decimalIndex - index) % 3 === 0) {
+            html += ',';
+            plain += ',';
+        }
+        html += index === targetIndex ? `<span class="target-digit">${character}</span>` : character;
+        plain += character;
+    }
+    return { html, plain };
+}
+
+function generatePlaceValueProblem(targetType, places) {
+    const distractorPool = Array.isArray(places) && places.length ? places : PLACE_VALUE_TYPES;
+    const isWholeOnly = WHOLE_ONLY_PLACE_VALUES.has(targetType);
+    const minimumDigits = MIN_DIGITS_FOR_PLACE[targetType] || 1;
+    const wholeLength = Math.min(minimumDigits + randomInt(0, 2), 7);
+    let wholePart = String(randomInt(1, 9));
+    for (let index = 1; index < wholeLength; index++) wholePart += randomInt(0, 9);
+
+    let fullString = wholePart;
+    if (!isWholeOnly) {
+        fullString += `.${randomInt(0, 9)}${randomInt(0, 9)}${randomInt(0, 9)}`;
+    }
+    const decimalIndex = fullString.indexOf('.') === -1 ? fullString.length : fullString.indexOf('.');
+    const offsets = {
+        Ones: -1, Tens: -2, Hundreds: -3, Thousands: -4,
+        'Ten-Thousands': -5, 'Hundred-Thousands': -6, Millions: -7,
+        Tenths: 1, Hundredths: 2, Thousandths: 3
+    };
+    const targetIndex = decimalIndex + offsets[targetType];
+    const display = formatNumberWithTarget(fullString, targetIndex);
+    const choices = shuffle([
+        targetType,
+        ...shuffle(distractorPool.filter(type => type !== targetType)).slice(0, 3)
+    ]).map(label => ({ value: label, label }));
+
+    return {
+        answer: targetType,
+        answerLabel: targetType,
+        questionText: `What is the place value of the digit ${fullString[targetIndex]} in ${display.plain}?`,
+        choices,
+        promptHtml: `<div class="legacy-question-panel decimal-panel"><span class="question-badge place-value-badge">Place Value</span><p class="problem-instruction">What is the place value of the underlined digit?</p><div class="decimal-number">${display.html}</div></div>`
+    };
+}
+
+function generateRoundingNumber() {
+    const digits = randomInt(1, 3);
+    const whole = digits === 1 ? randomInt(1, 9) : digits === 2 ? randomInt(10, 99) : randomInt(100, 999);
+    return { whole, d1: randomInt(0, 9), d2: randomInt(0, 9), d3: randomInt(1, 9) };
+}
+
+function computeRounded({ whole, d1, d2, d3 }, roundTo) {
+    const thousandths = whole * 1000 + d1 * 100 + d2 * 10 + d3;
+    if (roundTo === 'whole number') {
+        return String(Math.floor(thousandths / 1000) + (thousandths % 1000 >= 500 ? 1 : 0));
+    }
+    if (roundTo === 'tenth') {
+        const tenths = Math.floor(thousandths / 100) + (thousandths % 100 >= 50 ? 1 : 0);
+        return `${Math.floor(tenths / 10)}.${tenths % 10}`;
+    }
+    const hundredths = Math.floor(thousandths / 10) + (thousandths % 10 >= 5 ? 1 : 0);
+    return `${Math.floor(hundredths / 100)}.${String(hundredths % 100).padStart(2, '0')}`;
+}
+
+function generateWrongRoundingAnswers(correct, roundTo) {
+    const correctNumber = Number(correct);
+    const step = roundTo === 'whole number' ? 1 : roundTo === 'tenth' ? 0.1 : 0.01;
+    const decimals = roundTo === 'whole number' ? 0 : roundTo === 'tenth' ? 1 : 2;
+    const wrongs = [];
+    for (const multiplier of [1, -1, 2, -2, 3, -3]) {
+        const candidate = correctNumber + (step * multiplier);
+        if (candidate < 0) continue;
+        const label = candidate.toFixed(decimals);
+        if (label !== correct && !wrongs.includes(label)) wrongs.push(label);
+        if (wrongs.length === 3) break;
+    }
+    return wrongs;
+}
+
+function generateRoundingProblem(roundTo) {
+    const number = generateRoundingNumber();
+    const numberString = `${number.whole}.${number.d1}${number.d2}${number.d3}`;
+    const correct = computeRounded(number, roundTo);
+    const targetLabel = roundTo === 'whole number' ? 'nearest whole number' : `nearest ${roundTo}`;
+    const choices = shuffle([correct, ...generateWrongRoundingAnswers(correct, roundTo)])
+        .map(label => ({ value: label, label }));
+    return {
+        answer: correct,
+        answerLabel: correct,
+        questionText: `Round ${numberString} to the ${targetLabel}.`,
+        choices,
+        promptHtml: `<div class="legacy-question-panel decimal-panel"><span class="question-badge rounding-badge">Rounding</span><p class="problem-instruction">Round this number to the <strong>${targetLabel}</strong>.</p><div class="decimal-number">${numberString}</div></div>`
+    };
+}
+
+function generateDecimalProblem(config, moduleState) {
+    if (!moduleState.deck || !moduleState.deck.length) moduleState.deck = buildDecimalDeck(config);
+    const question = moduleState.deck.shift();
+    return question.kind === 'place-value'
+        ? generatePlaceValueProblem(question.type, config.places)
+        : generateRoundingProblem(question.roundTo);
+}
+
+// ---------------------------------------------------------------------------
+// Engine: list (fixed pool of multiple-choice questions, e.g. geometry)
+// ---------------------------------------------------------------------------
+
+const SHAPE_SVGS = {
+    Triangle: '<svg width="58" height="54" viewBox="0 0 58 54" aria-hidden="true"><polygon points="29,4 54,50 4,50" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    Square: '<svg width="54" height="54" viewBox="0 0 54 54" aria-hidden="true"><rect x="4" y="4" width="46" height="46" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    Pentagon: '<svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><polygon points="29,4 53,21 44,50 14,50 5,21" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
+    Hexagon: '<svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><polygon points="29,4 51,17 51,43 29,56 7,43 7,17" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>'
+};
+
+const GEO_DIAGRAM_1 = `<svg class="geometry-diagram" viewBox="0 0 220 135" role="img" aria-label="Points A, B, and C on a segment; line D E through B; and ray B F">
+    <defs>
+        <marker id="d1-arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
+        <marker id="d1-arrR" markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto-start-reverse"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
+    </defs>
+    <line x1="18" y1="80" x2="196" y2="80" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="110" y1="128" x2="110" y2="8" stroke="currentColor" stroke-width="2.5" marker-end="url(#d1-arr)" marker-start="url(#d1-arrR)"/>
+    <line x1="110" y1="80" x2="46" y2="18" stroke="currentColor" stroke-width="2.5" marker-end="url(#d1-arr)"/>
+    <circle cx="18" cy="80" r="4" fill="currentColor"/><circle cx="110" cy="80" r="4" fill="currentColor"/><circle cx="196" cy="80" r="4" fill="currentColor"/>
+    <text x="18" y="100">A</text><text x="110" y="100">B</text><text x="196" y="100">C</text><text x="40" y="16">F</text><text x="122" y="12">E</text><text x="122" y="133">D</text>
+</svg>`;
+
+const GEO_DIAGRAM_2 = `<svg class="geometry-diagram" viewBox="0 0 210 125" role="img" aria-label="Ray P Q, line R S, and segment T V">
+    <defs>
+        <marker id="d2-arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
+        <marker id="d2-arrR" markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto-start-reverse"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
+    </defs>
+    <line x1="20" y1="28" x2="190" y2="28" stroke="currentColor" stroke-width="2.5" marker-end="url(#d2-arr)"/><circle cx="20" cy="28" r="4" fill="currentColor"/>
+    <text x="20" y="20">P</text><text x="196" y="20">Q</text>
+    <line x1="8" y1="68" x2="202" y2="68" stroke="currentColor" stroke-width="2.5" marker-start="url(#d2-arrR)" marker-end="url(#d2-arr)"/>
+    <circle cx="62" cy="68" r="4" fill="currentColor"/><circle cx="148" cy="68" r="4" fill="currentColor"/><text x="62" y="60">R</text><text x="148" y="60">S</text>
+    <line x1="28" y1="108" x2="182" y2="108" stroke="currentColor" stroke-width="2.5"/><circle cx="28" cy="108" r="4" fill="currentColor"/><circle cx="182" cy="108" r="4" fill="currentColor"/>
+    <text x="28" y="100">T</text><text x="182" y="100">V</text>
+</svg>`;
+
+const DIAGRAMS = { GEO_DIAGRAM_1, GEO_DIAGRAM_2 };
+
+function generateListProblem(config, moduleState) {
+    const questions = Array.isArray(config.questions) ? config.questions : [];
+    if (!moduleState.deck || !moduleState.deck.length) moduleState.deck = shuffle(questions);
+    const question = moduleState.deck.shift();
+    const isShape = question.type === 'shape';
+    const choices = shuffle(question.choices).map(label => ({
+        value: label,
+        label,
+        html: isShape ? `${SHAPE_SVGS[label] || ''}<span>${label}</span>` : null
+    }));
+    const diagram = question.diagram ? (DIAGRAMS[question.diagram] || '') : '';
+
+    return {
+        answer: question.correct,
+        answerLabel: question.correct,
+        questionText: question.question,
+        choices,
+        choiceLayout: isShape ? 'shape-grid' : 'single-column',
+        promptHtml: `<div class="legacy-question-panel geometry-panel"><span class="question-badge geometry-badge">Geometry</span><p class="geometry-question-text">${question.question}</p>${diagram}</div>`
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Engine registry — Markdown configs select one of these by name.
+// ---------------------------------------------------------------------------
+
+const ENGINES = {
+    arithmetic: generateArithmeticProblem,
+    fractions: (config) => generateFractionProblem(config),
+    decimals: generateDecimalProblem,
+    list: generateListProblem
+};
+
+// ---------------------------------------------------------------------------
+// Result logging
+// ---------------------------------------------------------------------------
 
 class ResultsLogger {
     constructor(endpoint) {
@@ -196,297 +541,20 @@ class ResultsLogger {
     }
 }
 
-function randomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function randomItem(items) {
-    return items[randomInt(0, items.length - 1)];
-}
-
-function shuffle(items) {
-    const result = [...items];
-    for (let index = result.length - 1; index > 0; index--) {
-        const target = Math.floor(Math.random() * (index + 1));
-        [result[index], result[target]] = [result[target], result[index]];
-    }
-    return result;
-}
-
-function fractionKey(numerator, denominator) {
-    return `${numerator}/${denominator}`;
-}
-
-function fractionBar(numerator, denominator, compact = false) {
-    const segments = Array.from({ length: denominator }, (_, index) =>
-        `<span class="fraction-segment${index < numerator ? ' shaded' : ''}"></span>`
-    ).join('');
-    return `<span class="fraction-bar${compact ? ' compact' : ''}" aria-label="${numerator} out of ${denominator} equal parts shaded">${segments}</span>`;
-}
-
-function numberLine(numerator, denominator) {
-    const ticks = Array.from({ length: denominator + 1 }, (_, index) => {
-        const label = index === 0 ? '0' : index === denominator ? '1' : '';
-        return `<span class="number-line-tick${index === numerator ? ' active' : ''}"><span>${label}</span></span>`;
-    }).join('');
-    return `<div class="number-line" aria-label="Point at ${numerator} over ${denominator} on a number line">${ticks}</div>`;
-}
-
-function generateFractionProblem() {
-    const [numerator, denominator] = FRACTION_SEEDS[randomInt(0, FRACTION_SEEDS.length - 1)];
-    const maxMultiplier = Math.max(2, Math.min(4, Math.floor(12 / denominator)));
-    const multiplier = randomInt(2, maxMultiplier);
-    const equivalent = [numerator * multiplier, denominator * multiplier];
-    const correctKey = fractionKey(...equivalent);
-    const distractorCandidates = [
-        [equivalent[0] + 1, equivalent[1]],
-        [Math.max(1, equivalent[0] - 1), equivalent[1]],
-        [numerator + multiplier, denominator + multiplier],
-        [numerator, denominator * multiplier],
-        [Math.min(equivalent[1] - 1, equivalent[0] + 2), equivalent[1]],
-        [equivalent[0], equivalent[1] + 1],
-        [equivalent[0] + 1, equivalent[1] + 1]
-    ];
-    const seen = new Set([correctKey]);
-    const distractors = [];
-
-    for (const fraction of shuffle(distractorCandidates)) {
-        const key = fractionKey(...fraction);
-        if (fraction[0] > 0 && fraction[0] < fraction[1] && !seen.has(key)) {
-            seen.add(key);
-            distractors.push(fraction);
-        }
-        if (distractors.length === 3) break;
-    }
-
-    const choices = shuffle([equivalent, ...distractors]).map(([choiceNumerator, choiceDenominator]) => ({
-        value: fractionKey(choiceNumerator, choiceDenominator),
-        label: `${choiceNumerator}/${choiceDenominator}`,
-        html: `${fractionBar(choiceNumerator, choiceDenominator, true)}<span class="fraction-label"><span>${choiceNumerator}</span><span>${choiceDenominator}</span></span>`
-    }));
-    const useNumberLine = Math.random() < 0.5;
-    const visual = useNumberLine
-        ? numberLine(numerator, denominator)
-        : fractionBar(numerator, denominator);
-    const modelName = useNumberLine ? 'number line' : 'shaded bar';
-
-    return {
-        answer: correctKey,
-        answerLabel: `${equivalent[0]}/${equivalent[1]}`,
-        questionText: `Which fraction is equivalent to ${numerator}/${denominator}?`,
-        choices,
-        promptHtml: `
-            <p class="problem-instruction">Which fraction names the same amount as this ${modelName}?</p>
-            <div class="fraction-model">
-                ${visual}
-                <span class="fraction-label large"><span>${numerator}</span><span>${denominator}</span></span>
-            </div>
-            <p class="visual-hint">Look at the amount shown, not only the numbers.</p>
-        `
-    };
-}
-
-const PLACE_VALUE_TYPES = [
-    'Millions', 'Hundred-Thousands', 'Ten-Thousands', 'Thousands', 'Hundreds',
-    'Tens', 'Ones', 'Tenths', 'Hundredths', 'Thousandths'
-];
-
-const WHOLE_ONLY_PLACE_VALUES = new Set([
-    'Millions', 'Hundred-Thousands', 'Ten-Thousands', 'Thousands'
-]);
-
-const MIN_DIGITS_FOR_PLACE = {
-    Millions: 7,
-    'Hundred-Thousands': 6,
-    'Ten-Thousands': 5,
-    Thousands: 4,
-    Hundreds: 3,
-    Tens: 2,
-    Ones: 1,
-    Tenths: 1,
-    Hundredths: 1,
-    Thousandths: 1
-};
-
-const SHAPE_SVGS = {
-    Triangle: '<svg width="58" height="54" viewBox="0 0 58 54" aria-hidden="true"><polygon points="29,4 54,50 4,50" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
-    Square: '<svg width="54" height="54" viewBox="0 0 54 54" aria-hidden="true"><rect x="4" y="4" width="46" height="46" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
-    Pentagon: '<svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><polygon points="29,4 53,21 44,50 14,50 5,21" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>',
-    Hexagon: '<svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><polygon points="29,4 51,17 51,43 29,56 7,43 7,17" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/></svg>'
-};
-
-const GEO_DIAGRAM_1 = `<svg class="geometry-diagram" viewBox="0 0 220 135" role="img" aria-label="Points A, B, and C on a segment; line D E through B; and ray B F">
-    <defs>
-        <marker id="d1-arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
-        <marker id="d1-arrR" markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto-start-reverse"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
-    </defs>
-    <line x1="18" y1="80" x2="196" y2="80" stroke="currentColor" stroke-width="2.5"/>
-    <line x1="110" y1="128" x2="110" y2="8" stroke="currentColor" stroke-width="2.5" marker-end="url(#d1-arr)" marker-start="url(#d1-arrR)"/>
-    <line x1="110" y1="80" x2="46" y2="18" stroke="currentColor" stroke-width="2.5" marker-end="url(#d1-arr)"/>
-    <circle cx="18" cy="80" r="4" fill="currentColor"/><circle cx="110" cy="80" r="4" fill="currentColor"/><circle cx="196" cy="80" r="4" fill="currentColor"/>
-    <text x="18" y="100">A</text><text x="110" y="100">B</text><text x="196" y="100">C</text><text x="40" y="16">F</text><text x="122" y="12">E</text><text x="122" y="133">D</text>
-</svg>`;
-
-const GEO_DIAGRAM_2 = `<svg class="geometry-diagram" viewBox="0 0 210 125" role="img" aria-label="Ray P Q, line R S, and segment T V">
-    <defs>
-        <marker id="d2-arr" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
-        <marker id="d2-arrR" markerWidth="8" markerHeight="8" refX="1" refY="3" orient="auto-start-reverse"><path d="M0,0 L0,6 L8,3 z" fill="currentColor"/></marker>
-    </defs>
-    <line x1="20" y1="28" x2="190" y2="28" stroke="currentColor" stroke-width="2.5" marker-end="url(#d2-arr)"/><circle cx="20" cy="28" r="4" fill="currentColor"/>
-    <text x="20" y="20">P</text><text x="196" y="20">Q</text>
-    <line x1="8" y1="68" x2="202" y2="68" stroke="currentColor" stroke-width="2.5" marker-start="url(#d2-arrR)" marker-end="url(#d2-arr)"/>
-    <circle cx="62" cy="68" r="4" fill="currentColor"/><circle cx="148" cy="68" r="4" fill="currentColor"/><text x="62" y="60">R</text><text x="148" y="60">S</text>
-    <line x1="28" y1="108" x2="182" y2="108" stroke="currentColor" stroke-width="2.5"/><circle cx="28" cy="108" r="4" fill="currentColor"/><circle cx="182" cy="108" r="4" fill="currentColor"/>
-    <text x="28" y="100">T</text><text x="182" y="100">V</text>
-</svg>`;
-
-const GEOMETRY_QUESTIONS = [
-    { type: 'shape', question: 'Which shape below has exactly 5 line segments?', choices: ['Triangle', 'Square', 'Pentagon', 'Hexagon'], correct: 'Pentagon' },
-    { type: 'shape', question: 'Which shape below has exactly 4 line segments?', choices: ['Triangle', 'Square', 'Pentagon', 'Hexagon'], correct: 'Square' },
-    { question: 'Which of the following statements is true?', choices: ['A line segment has no endpoints.', 'A line has 2 endpoints.', 'A ray has one endpoint.', 'A line segment has one endpoint.'], correct: 'A ray has one endpoint.' },
-    { question: 'Which of the following statements is true?', choices: ['A line extends in only one direction.', 'A ray has two endpoints.', 'A line segment has exactly two endpoints.', 'A point has length and width.'], correct: 'A line segment has exactly two endpoints.' },
-    { question: 'Challenge: Which of the following statements is true?', choices: ['The capital letter V contains two angles.', 'The capital letter W contains two angles.', 'The capital letter V contains one angle.', 'The capital letter I contains one angle.'], correct: 'The capital letter V contains one angle.' },
-    { question: 'Challenge: Which of the following statements is true?', choices: ['The capital letter W contains one angle.', 'The capital letter V contains three angles.', 'The capital letter Z contains three angles.', 'The capital letter W contains three angles.'], correct: 'The capital letter W contains three angles.' },
-    { question: 'Use the diagram to answer: which of the following is a ray?', diagram: GEO_DIAGRAM_1, choices: ['Ray BF', 'Ray B', 'Ray DE', 'Ray DCB'], correct: 'Ray BF' },
-    { question: 'Use the diagram to answer: which of the following is a line segment?', diagram: GEO_DIAGRAM_1, choices: ['Line segment FB', 'Line segment AF', 'Line segment AC', 'Line segment DE'], correct: 'Line segment AC' },
-    { question: 'Use the diagram to answer: which of the following is a ray?', diagram: GEO_DIAGRAM_2, choices: ['Ray PQ', 'Ray RS', 'Ray TV', 'Ray QP'], correct: 'Ray PQ' },
-    { question: 'Use the diagram to answer: which of the following is a line segment?', diagram: GEO_DIAGRAM_2, choices: ['Line segment PQ', 'Line segment RS', 'Line segment TV', 'Line segment RV'], correct: 'Line segment TV' }
-];
-
-function buildDecimalDeck() {
-    const roundingTargets = [
-        ...Array(4).fill('whole number'),
-        ...Array(3).fill('tenth'),
-        ...Array(3).fill('hundredth')
-    ];
-    return shuffle([
-        ...PLACE_VALUE_TYPES.map(type => ({ kind: 'place-value', type })),
-        ...roundingTargets.map(roundTo => ({ kind: 'rounding', roundTo }))
-    ]);
-}
-
-function formatNumberWithTarget(fullString, targetIndex) {
-    const decimalIndex = fullString.indexOf('.') === -1 ? fullString.length : fullString.indexOf('.');
-    let html = '';
-    let plain = '';
-    for (let index = 0; index < fullString.length; index++) {
-        const character = fullString[index];
-        if (index > 0 && index < decimalIndex && (decimalIndex - index) % 3 === 0) {
-            html += ',';
-            plain += ',';
-        }
-        html += index === targetIndex ? `<span class="target-digit">${character}</span>` : character;
-        plain += character;
-    }
-    return { html, plain };
-}
-
-function generatePlaceValueProblem(targetType) {
-    const isWholeOnly = WHOLE_ONLY_PLACE_VALUES.has(targetType);
-    const minimumDigits = MIN_DIGITS_FOR_PLACE[targetType] || 1;
-    const wholeLength = Math.min(minimumDigits + randomInt(0, 2), 7);
-    let wholePart = String(randomInt(1, 9));
-    for (let index = 1; index < wholeLength; index++) wholePart += randomInt(0, 9);
-
-    let fullString = wholePart;
-    if (!isWholeOnly) {
-        fullString += `.${randomInt(0, 9)}${randomInt(0, 9)}${randomInt(0, 9)}`;
-    }
-    const decimalIndex = fullString.indexOf('.') === -1 ? fullString.length : fullString.indexOf('.');
-    const offsets = {
-        Ones: -1, Tens: -2, Hundreds: -3, Thousands: -4,
-        'Ten-Thousands': -5, 'Hundred-Thousands': -6, Millions: -7,
-        Tenths: 1, Hundredths: 2, Thousandths: 3
-    };
-    const targetIndex = decimalIndex + offsets[targetType];
-    const display = formatNumberWithTarget(fullString, targetIndex);
-    const choices = shuffle([
-        targetType,
-        ...shuffle(PLACE_VALUE_TYPES.filter(type => type !== targetType)).slice(0, 3)
-    ]).map(label => ({ value: label, label }));
-
-    return {
-        answer: targetType,
-        answerLabel: targetType,
-        questionText: `What is the place value of the digit ${fullString[targetIndex]} in ${display.plain}?`,
-        choices,
-        promptHtml: `<div class="legacy-question-panel decimal-panel"><span class="question-badge place-value-badge">Place Value</span><p class="problem-instruction">What is the place value of the underlined digit?</p><div class="decimal-number">${display.html}</div></div>`
-    };
-}
-
-function generateRoundingNumber() {
-    const digits = randomInt(1, 3);
-    const whole = digits === 1 ? randomInt(1, 9) : digits === 2 ? randomInt(10, 99) : randomInt(100, 999);
-    return { whole, d1: randomInt(0, 9), d2: randomInt(0, 9), d3: randomInt(1, 9) };
-}
-
-function computeRounded({ whole, d1, d2, d3 }, roundTo) {
-    const thousandths = whole * 1000 + d1 * 100 + d2 * 10 + d3;
-    if (roundTo === 'whole number') {
-        return String(Math.floor(thousandths / 1000) + (thousandths % 1000 >= 500 ? 1 : 0));
-    }
-    if (roundTo === 'tenth') {
-        const tenths = Math.floor(thousandths / 100) + (thousandths % 100 >= 50 ? 1 : 0);
-        return `${Math.floor(tenths / 10)}.${tenths % 10}`;
-    }
-    const hundredths = Math.floor(thousandths / 10) + (thousandths % 10 >= 5 ? 1 : 0);
-    return `${Math.floor(hundredths / 100)}.${String(hundredths % 100).padStart(2, '0')}`;
-}
-
-function generateWrongRoundingAnswers(correct, roundTo) {
-    const correctNumber = Number(correct);
-    const step = roundTo === 'whole number' ? 1 : roundTo === 'tenth' ? 0.1 : 0.01;
-    const decimals = roundTo === 'whole number' ? 0 : roundTo === 'tenth' ? 1 : 2;
-    const wrongs = [];
-    for (const multiplier of [1, -1, 2, -2, 3, -3]) {
-        const candidate = correctNumber + (step * multiplier);
-        if (candidate < 0) continue;
-        const label = candidate.toFixed(decimals);
-        if (label !== correct && !wrongs.includes(label)) wrongs.push(label);
-        if (wrongs.length === 3) break;
-    }
-    return wrongs;
-}
-
-function generateRoundingProblem(roundTo) {
-    const number = generateRoundingNumber();
-    const numberString = `${number.whole}.${number.d1}${number.d2}${number.d3}`;
-    const correct = computeRounded(number, roundTo);
-    const targetLabel = roundTo === 'whole number' ? 'nearest whole number' : `nearest ${roundTo}`;
-    const choices = shuffle([correct, ...generateWrongRoundingAnswers(correct, roundTo)])
-        .map(label => ({ value: label, label }));
-    return {
-        answer: correct,
-        answerLabel: correct,
-        questionText: `Round ${numberString} to the ${targetLabel}.`,
-        choices,
-        promptHtml: `<div class="legacy-question-panel decimal-panel"><span class="question-badge rounding-badge">Rounding</span><p class="problem-instruction">Round this number to the <strong>${targetLabel}</strong>.</p><div class="decimal-number">${numberString}</div></div>`
-    };
-}
-
-function generateGeometryProblem(question) {
-    const choices = shuffle(question.choices).map(label => ({
-        value: label,
-        label,
-        html: question.type === 'shape' ? `${SHAPE_SVGS[label]}<span>${label}</span>` : null
-    }));
-    return {
-        answer: question.correct,
-        answerLabel: question.correct,
-        questionText: question.question,
-        choices,
-        choiceLayout: question.type === 'shape' ? 'shape-grid' : 'single-column',
-        promptHtml: `<div class="legacy-question-panel geometry-panel"><span class="question-badge geometry-badge">Geometry</span><p class="geometry-question-text">${question.question}</p>${question.diagram || ''}</div>`
-    };
-}
+// ---------------------------------------------------------------------------
+// Game controller
+// ---------------------------------------------------------------------------
 
 class MathGame {
-    constructor() {
-        this.selectedModuleId = 'multiplication';
+    constructor({ modules, order }) {
+        this.modules = modules;
+        this.moduleOrder = order;
+        this.selectedModuleId = order[0];
         this.nextProblemTimeout = null;
         this.fireworksTimeout = null;
         this.resultsLogger = new ResultsLogger(window.MATH_GAME_CONFIG?.googleSheetsEndpoint);
         this.initializeElements();
+        this.renderModuleCards();
         this.bindEvents();
         this.resetGame();
         this.selectModule(this.selectedModuleId);
@@ -499,7 +567,7 @@ class MathGame {
         this.backToMenuBtn = document.getElementById('back-to-menu-btn');
         this.pauseBtn = document.getElementById('pause-btn');
         this.finishBtn = document.getElementById('finish-btn');
-        this.moduleCards = [...document.querySelectorAll('.module-card')];
+        this.moduleGrid = document.getElementById('module-grid');
         this.answerInput = document.getElementById('answer-input');
         this.numericAnswerSection = document.getElementById('numeric-answer-section');
         this.choiceAnswerSection = document.getElementById('choice-answer-section');
@@ -531,6 +599,26 @@ class MathGame {
         this.fireworksElement = document.getElementById('fireworks');
     }
 
+    renderModuleCards() {
+        this.moduleGrid.innerHTML = '';
+        this.moduleOrder.forEach((moduleId, index) => {
+            const module = this.modules[moduleId];
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = `module-card${index === 0 ? ' selected' : ''}`;
+            card.dataset.module = moduleId;
+            card.setAttribute('aria-pressed', String(index === 0));
+            card.innerHTML = `
+                <span class="module-icon" aria-hidden="true">${module.icon}</span>
+                <span class="module-name">${module.title}</span>
+                <span class="module-description">${module.description}</span>
+                <span class="module-meta">${module.meta}</span>
+            `;
+            this.moduleGrid.appendChild(card);
+        });
+        this.moduleCards = [...this.moduleGrid.querySelectorAll('.module-card')];
+    }
+
     bindEvents() {
         this.startBtn.addEventListener('click', () => this.startGame());
         this.submitBtn.addEventListener('click', () => this.checkAnswer());
@@ -549,11 +637,11 @@ class MathGame {
     }
 
     get module() {
-        return QUIZ_MODULES[this.selectedModuleId];
+        return this.modules[this.selectedModuleId];
     }
 
     selectModule(moduleId) {
-        if (!QUIZ_MODULES[moduleId]) return;
+        if (!this.modules[moduleId]) return;
         this.selectedModuleId = moduleId;
         this.moduleCards.forEach(card => {
             const isSelected = card.dataset.module === moduleId;
@@ -882,7 +970,7 @@ class MathGame {
     }
 
     getCorrectFeedback() {
-        const messages = CORRECT_FEEDBACK[this.selectedModuleId];
+        const messages = this.module.correctFeedback;
         return messages[randomInt(0, messages.length - 1)];
     }
 
@@ -995,6 +1083,28 @@ class MathGame {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.mathGame = new MathGame();
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+
+function showLoadError(error) {
+    console.error('Could not load quizzes.', error);
+    const grid = document.getElementById('module-grid');
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn) startBtn.disabled = true;
+    if (!grid) return;
+    const isFileProtocol = window.location.protocol === 'file:';
+    const hint = isFileProtocol
+        ? 'Quizzes are loaded from the <code>quizzes/</code> folder, which browsers block when opening the file directly. Run a local server instead, for example <code>python3 -m http.server 8000</code>, then visit <code>http://localhost:8000</code>.'
+        : `Please check that the <code>quizzes/</code> folder is present. (${error.message})`;
+    grid.innerHTML = `<div class="module-load-error" role="alert"><p><strong>Could not load the quizzes.</strong></p><p>${hint}</p></div>`;
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const { modules, order } = await loadModules();
+        window.mathGame = new MathGame({ modules, order });
+    } catch (error) {
+        showLoadError(error);
+    }
 });

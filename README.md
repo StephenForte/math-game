@@ -1,8 +1,8 @@
 # 🧮 Math Practice Lab
 
-A friendly, browser-based collection of short math quizzes. The app currently includes three practice modules:
+A friendly, browser-based collection of short math quizzes. Every quiz is defined by a Markdown file in the `quizzes/` folder, so you can change difficulty, timing, and even add new quizzes without touching the JavaScript. The app currently includes these practice modules:
 
-1. **Times Table Practice** — ten multiplication questions using the 2–12 facts, with 30 seconds per question.
+1. **Times Table Practice** — multi-digit multiplication at a rising 5th-grade level (2-digit × 1-to-2-digit by default), with adjustable difficulty.
 2. **Fluency Sprint** — twelve mixed multiplication and exact-division facts using factors 2–12, with a focused 15-second pace.
 3. **Fraction Equivalence Lab** — eight untimed questions that use fraction bars and number lines to make equivalent amounts visible.
 4. **Place Value & Rounding** — the legacy twenty-question challenge covering place values from millions through thousandths plus rounding to whole numbers, tenths, and hundredths.
@@ -10,15 +10,17 @@ A friendly, browser-based collection of short math quizzes. The app currently in
 
 ## How to run
 
-Open `index.html` in a modern browser. No installation or build step is required.
+Quizzes are loaded from the `quizzes/` folder at runtime, so the app needs to be
+served over `http://` (not opened as a `file://` path, which browsers block).
 
-For a local server, run:
+Run a local server from the project folder:
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://localhost:8000`. Any static host (GitHub Pages, Netlify,
+etc.) also works. No build step is required.
 
 ## How to play
 
@@ -37,10 +39,40 @@ Then visit `http://localhost:8000`.
 - The finish screen reviews every answered question, including the correct answer and any incorrect choice or timeout.
 - The fraction module is intentionally untimed so the learner can reason from the visual model.
 - Fraction choices show both the written fraction and a shaded bar, reinforcing amount rather than a memorized numerator/denominator rule.
-- Quiz metadata and problem generators live in the `QUIZ_MODULES` configuration at the top of `script.js`. This is the first step toward loading plug-and-play module definitions from Markdown later.
+- Quizzes are data-driven: each one is a Markdown file in `quizzes/` with an embedded `json` config block, loaded at runtime. The shared engine in `script.js` only provides a few generic generators (`arithmetic`, `fractions`, `decimals`, `list`) that the Markdown files select and parameterize.
 - Keyboard input, visible focus states, reduced-motion support, and responsive layouts are included.
 - The opening screen uses a colorful, preteen-friendly “math mission” theme without changing the focused quiz interface.
-- Times Table Practice uses factors 2–12 while limiting factors 10 and 11 to one appearance each per session.
+- Times Table Practice now uses multi-digit factors (rising 5th-grade level); its difficulty is set entirely by the factor ranges in `quizzes/multiplication.md`.
+
+## Editing or adding quizzes (Markdown-driven)
+
+Each quiz lives in its own Markdown file in `quizzes/`. The human-readable prose
+explains the quiz, and a fenced ` ```json ` config block holds the tunable rules.
+Edit a value, save, and reload the page — there is nothing to recompile.
+
+`quizzes/manifest.md` controls which quizzes appear and in what order. To add a
+quiz, create a new `.md` file and list its filename there; to remove one, delete
+its line.
+
+Common fields in a quiz config block:
+
+- `title`, `icon`, `description`, `meta` — how the quiz appears on the menu card.
+- `maxProblems` — questions per session.
+- `timeLimit` — seconds per question (use `null` for untimed), or
+  `overallTimeLimit` for a single timer covering the whole session.
+- `generator` — which built-in engine runs the quiz:
+  - `arithmetic` — `operations` (`multiply`, `divide`, `add`, `subtract`) plus
+    `factorA` / `factorB` ranges (`{ "min": …, "max": … }`). Division is always
+    built from a product, so answers stay whole.
+  - `fractions` — `seeds` (starting fractions) and `maxDenominator`.
+  - `decimals` — `places` to ask about and a `rounding` mix.
+  - `list` — a fixed `questions` array of multiple-choice items.
+- `correctFeedback` — the encouraging messages shown on a correct answer.
+
+For example, to make **Times Table Practice** harder, open
+`quizzes/multiplication.md` and raise the factor ranges (e.g. set `factorB` to
+`{ "min": 11, "max": 99 }` for full 2-digit × 2-digit problems); to make it
+easier, lower the `max` values.
 
 ## Google Sheets result logging
 
@@ -57,7 +89,8 @@ The repository did not contain the previous endpoint or logging schema, so `conf
 ## Project files
 
 - `index.html` — module picker, shared quiz interface, and results screen
-- `script.js` — shared quiz engine and module-specific problem generators
+- `quizzes/` — one Markdown file per quiz plus `manifest.md` (the quiz definitions)
+- `script.js` — shared quiz engine, generic generators, and the Markdown loader
 - `config.js` — Google Sheets endpoint configuration
 - `google-apps-script.gs` — Sheet-bound result logger for Apps Script
 - `styles.css` — responsive styling and visual math models

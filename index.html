@@ -52,44 +52,11 @@
                         <input type="text" id="player-name" placeholder="Enter a name" maxlength="20" autocomplete="off">
                     </div>
 
-                    <div class="module-grid" role="radiogroup" aria-label="Quiz module">
-                        <button class="module-card selected" type="button" data-module="multiplication" aria-pressed="true">
-                            <span class="module-icon" aria-hidden="true">✖️</span>
-                            <span class="module-name">Times Table Practice</span>
-                            <span class="module-description">Ten multiplication questions with a relaxed 30-second timer.</span>
-                            <span class="module-meta">10 questions · 2–12 facts</span>
-                        </button>
-
-                        <button class="module-card" type="button" data-module="fluency" aria-pressed="false">
-                            <span class="module-icon" aria-hidden="true">⚡</span>
-                            <span class="module-name">Fluency Sprint</span>
-                            <span class="module-description">Build automatic recall with mixed multiplication and exact division.</span>
-                            <span class="module-meta">12 questions · 15-second pace</span>
-                        </button>
-
-                        <button class="module-card" type="button" data-module="fractions" aria-pressed="false">
-                            <span class="module-icon" aria-hidden="true">🟰</span>
-                            <span class="module-name">Fraction Equivalence Lab</span>
-                            <span class="module-description">Compare shaded bars and number lines to see why fractions are equal.</span>
-                            <span class="module-meta">8 visual questions · untimed</span>
-                        </button>
-
-                        <button class="module-card" type="button" data-module="decimals" aria-pressed="false">
-                            <span class="module-icon" aria-hidden="true">🔢</span>
-                            <span class="module-name">Place Value &amp; Rounding</span>
-                            <span class="module-description">Find decimal places from millions to thousandths and round with confidence.</span>
-                            <span class="module-meta">20 questions · 3-minute challenge</span>
-                        </button>
-
-                        <button class="module-card" type="button" data-module="geometry" aria-pressed="false">
-                            <span class="module-icon" aria-hidden="true">📐</span>
-                            <span class="module-name">Geometry Lab</span>
-                            <span class="module-description">Explore shapes, line segments, rays, lines, and angles.</span>
-                            <span class="module-meta">10 questions · 3-minute challenge</span>
-                        </button>
+                    <div id="module-grid" class="module-grid" role="radiogroup" aria-label="Quiz module">
+                        <p class="module-loading">Loading quizzes…</p>
                     </div>
 
-                    <button id="start-btn" class="btn btn-primary">Start Times Table Practice</button>
+                    <button id="start-btn" class="btn btn-primary">Start Quiz</button>
                 </div>
             </section>
 
