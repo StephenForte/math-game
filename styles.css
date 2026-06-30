@@ -377,10 +377,26 @@ header > p:last-child {
     to { transform: translateY(-4px) rotate(6deg); }
 }
 
+.start-row {
+    display: flex;
+    width: min(100%, 640px);
+    margin: 28px auto 0;
+    align-items: flex-end;
+    gap: 14px;
+}
+
 .name-input-section {
-    width: min(100%, 400px);
-    margin: 28px auto;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
     text-align: left;
+}
+
+.start-row .btn-primary {
+    flex-shrink: 0;
+    align-self: flex-end;
+    min-height: 52px;
+    margin-bottom: 0;
 }
 
 .name-input-section label {
@@ -747,6 +763,11 @@ header > p:last-child {
 #answer-input {
     font-size: 1.25rem;
     text-align: center;
+}
+
+.numeric-answer-input {
+    appearance: none;
+    -moz-appearance: textfield;
 }
 
 .fraction-model {
@@ -1244,6 +1265,8 @@ header > p:last-child {
 
 @media (max-width: 440px) {
     .card { padding: 22px 16px; border-radius: 18px; }
+    .start-row { flex-direction: column; align-items: stretch; }
+    .start-row .btn-primary { width: 100%; min-height: 48px; }
     .game-header { grid-template-columns: 1fr; }
     .game-header > div { width: 100%; }
     .game-controls .btn,

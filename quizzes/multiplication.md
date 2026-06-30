@@ -31,7 +31,7 @@ rising-5th-grade level.
   "maxProblems": 10,
   "timeLimit": 60,
   "operations": ["multiply"],
-  "factorA": { "min": 12, "max": 99 },
+  "factorA": { "min": 8, "max": 99 },
   "factorB": { "min": 2, "max": 12 },
   "correctFeedback": [
     "Super! You nailed it. 🎉",

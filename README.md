@@ -13,14 +13,15 @@ A friendly, browser-based collection of short math quizzes. Every quiz is define
 Quizzes are loaded from the `quizzes/` folder at runtime, so the app needs to be
 served over `http://` (not opened as a `file://` path, which browsers block).
 
-Run a local server from the project folder:
+Run the local dev server from the project folder:
 
 ```sh
-python3 -m http.server 8000
+python3 serve.py
 ```
 
-Then visit `http://localhost:8000`. Any static host (GitHub Pages, Netlify,
-etc.) also works. No build step is required.
+Then visit `http://localhost:8000`. This server also powers the quiz admin console at `http://localhost:8000/admin.html`, where you can edit the Markdown quiz files in `quizzes/`.
+
+For a plain static server without admin save support, `python3 -m http.server 8000` also works. GitHub Pages and other static hosts work for the game itself (not the admin editor). No build step is required.
 
 ## How to play
 
@@ -43,6 +44,12 @@ etc.) also works. No build step is required.
 - Keyboard input, visible focus states, reduced-motion support, and responsive layouts are included.
 - The opening screen uses a colorful, preteen-friendly “math mission” theme without changing the focused quiz interface.
 - Times Table Practice now uses multi-digit factors (rising 5th-grade level); its difficulty is set entirely by the factor ranges in `quizzes/multiplication.md`.
+
+## Quiz admin console
+
+Open `http://localhost:8000/admin.html` while `serve.py` is running. It lists every quiz Markdown file, lets you edit the full file (including the JSON config block), and saves changes back to disk. Reload the game after saving to pick up new difficulty or timing settings.
+
+The admin console only works with `serve.py` on your machine — it cannot write files on GitHub Pages or other read-only static hosts.
 
 ## Editing or adding quizzes (Markdown-driven)
 

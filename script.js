@@ -36,6 +36,12 @@ function shuffle(items) {
     return result;
 }
 
+function parseNumericAnswer(raw) {
+    const trimmed = String(raw).trim();
+    if (!trimmed || !/^-?\d+$/.test(trimmed)) return null;
+    return Number(trimmed);
+}
+
 // ---------------------------------------------------------------------------
 // Markdown config loading
 // ---------------------------------------------------------------------------
@@ -520,8 +526,16 @@ class ResultsLogger {
         }
 
         try {
+            console.info('Sending quiz result to Google Sheets…', {
+                endpoint: this.endpoint,
+                userName: result.userName || result.playerName,
+                moduleName: result.moduleName,
+                pointsDisplay: result.pointsDisplay,
+                accuracy: result.accuracy
+            });
             await this.send(result);
             this.savePending(this.getPending().filter(item => item.sessionId !== result.sessionId));
+            console.info('Quiz result sent (or queued by the browser). Check the Quiz Results sheet tab.');
         } catch (error) {
             console.warn('Could not send quiz result; it will be retried next time.', error);
         }
@@ -772,7 +786,19 @@ class MathGame {
             this.answerInput.focus();
             return;
         }
-        const userAnswer = this.module.inputType === 'number' ? Number(rawAnswer) : rawAnswer;
+
+        let userAnswer;
+        if (this.module.inputType === 'number') {
+            userAnswer = parseNumericAnswer(rawAnswer);
+            if (userAnswer === null) {
+                this.showFeedback('Please enter a whole number.', 'paused');
+                this.answerInput.focus();
+                return;
+            }
+        } else {
+            userAnswer = rawAnswer;
+        }
+
         this.completeProblem(userAnswer === this.currentProblem.answer, false, userAnswer);
     }
 
@@ -881,6 +907,7 @@ class MathGame {
         this.setAnswerControlsDisabled(true);
 
         const accuracy = this.totalAttempts ? Math.round((this.problemsSolved / this.totalAttempts) * 100) : 0;
+        const maxScore = this.module.maxProblems * 10;
         const totalTime = this.startTime ? (this.endTime - this.startTime) / 1000 : 0;
         const averageTime = this.problemTimes.length
             ? this.problemTimes.reduce((sum, time) => sum + time, 0) / this.problemTimes.length
@@ -888,7 +915,7 @@ class MathGame {
 
         this.updatePlayerDisplay();
         this.finalModuleNameElement.textContent = this.module.title;
-        this.finalScoreElement.textContent = this.score;
+        this.finalScoreElement.textContent = `${this.score} out of ${maxScore}`;
         this.problemsSolvedElement.textContent = `${this.problemsSolved}/${this.totalAttempts}`;
         this.accuracyElement.textContent = `${accuracy}%`;
         this.totalTimeElement.textContent = `${totalTime.toFixed(1)}s`;
@@ -900,13 +927,16 @@ class MathGame {
         void this.resultsLogger.log({
             timestamp: new Date().toISOString(),
             sessionId: this.sessionId,
+            userName: this.playerName,
             playerName: this.playerName,
             name: this.playerName,
             player: this.playerName,
             studentName: this.playerName,
             moduleId: this.selectedModuleId,
             moduleName: this.module.title,
-            score: this.score,
+            points: this.score,
+            maxPoints: maxScore,
+            pointsDisplay: `${this.score}/${maxScore}`,
             correctAnswers: this.problemsSolved,
             questionsAnswered: this.totalAttempts,
             totalQuestions: this.module.maxProblems,

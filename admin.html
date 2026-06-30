@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Admin — Math Practice Lab</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="admin-body">
+    <div class="admin-shell">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Local admin console</p>
+                <h1>📝 Quiz Editor</h1>
+                <p class="admin-lede">Edit quiz Markdown files and their JSON config blocks. Changes apply after you reload the game.</p>
+            </div>
+            <div class="admin-header-actions">
+                <a class="btn btn-secondary" href="index.html">← Back to game</a>
+            </div>
+        </header>
+
+        <div id="admin-unavailable" class="admin-banner error" hidden role="alert">
+            <strong>Admin API unavailable.</strong>
+            Start the dev server with <code>python3 serve.py</code> (not plain <code>http.server</code>) so quiz files can be saved.
+        </div>
+
+        <div class="admin-layout">
+            <aside class="admin-sidebar" aria-label="Quiz files">
+                <h2>Quiz files</h2>
+                <ul id="quiz-file-list" class="quiz-file-list"></ul>
+            </aside>
+
+            <main class="admin-main">
+                <div id="admin-empty" class="admin-empty">
+                    <p>Select a quiz file to edit.</p>
+                </div>
+
+                <div id="admin-editor" class="admin-editor" hidden>
+                    <div class="admin-editor-toolbar">
+                        <div>
+                            <h2 id="editor-filename">quiz.md</h2>
+                            <p id="editor-hint" class="admin-hint">Edit the Markdown and JSON config block, then save.</p>
+                        </div>
+                        <div class="admin-editor-actions">
+                            <button id="reload-btn" class="btn btn-secondary" type="button">Reload</button>
+                            <button id="save-btn" class="btn btn-primary" type="button">Save file</button>
+                        </div>
+                    </div>
+                    <textarea id="editor-content" class="admin-textarea" spellcheck="false"></textarea>
+                    <p id="admin-status" class="admin-status" role="status" aria-live="polite"></p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -47,16 +47,17 @@
                         </div>
                     </div>
 
-                    <div class="name-input-section">
-                        <label for="player-name">Learner’s name</label>
-                        <input type="text" id="player-name" placeholder="Enter a name" maxlength="20" autocomplete="off">
+                    <div class="start-row">
+                        <div class="name-input-section">
+                            <label for="player-name">Learner’s name</label>
+                            <input type="text" id="player-name" placeholder="Enter a name" maxlength="20" autocomplete="off">
+                        </div>
+                        <button id="start-btn" class="btn btn-primary">Start Quiz</button>
                     </div>
 
                     <div id="module-grid" class="module-grid" role="radiogroup" aria-label="Quiz module">
                         <p class="module-loading">Loading quizzes…</p>
                     </div>
-
-                    <button id="start-btn" class="btn btn-primary">Start Quiz</button>
                 </div>
             </section>
 
@@ -93,7 +94,7 @@
 
                     <div id="numeric-answer-section" class="answer-section">
                         <label class="sr-only" for="answer-input">Your answer</label>
-                        <input type="number" id="answer-input" placeholder="Enter your answer" inputmode="numeric" autocomplete="off">
+                        <input type="text" id="answer-input" class="numeric-answer-input" placeholder="Enter your answer" inputmode="numeric" pattern="[0-9]*" autocomplete="off" spellcheck="false">
                         <button id="submit-btn" class="btn btn-primary" type="button">Submit Answer</button>
                     </div>
 
@@ -110,7 +111,7 @@
                     <div class="result-stats">
                         <p>Module: <span id="final-module-name">Times Table Practice</span></p>
                         <p>Player: <span id="final-player-name">Player</span></p>
-                        <p>Final Score: <span id="final-score">0</span></p>
+                        <p>Points: <span id="final-score">0 out of 0</span></p>
                         <p>Correct Answers: <span id="problems-solved">0</span></p>
                         <p>Accuracy: <span id="accuracy">0%</span></p>
                         <p>Total Time: <span id="total-time">0.0s</span></p>
@@ -137,7 +138,7 @@
 
     <div id="fireworks" class="fireworks" aria-hidden="true"></div>
 
-    <script src="config.js"></script>
-    <script src="script.js"></script>
+    <script src="config.js?v=20260630v3"></script>
+    <script src="script.js?v=20260630v3"></script>
 </body>
 </html>

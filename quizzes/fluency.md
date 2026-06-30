@@ -29,6 +29,8 @@ Build automatic recall with mixed multiplication and exact division. Edit the
   "correctFeedback": [
     "Super! That fact came back fast. ⚡",
     "Boom! Instant recall. 🚀",
+    "The Force is strong with you. 🌌",
+    "The Boo Boo Butt is Proud!🎯",
     "Excellent! Your math brain is flying. 🌟"
   ]
 }
