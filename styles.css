@@ -464,10 +464,10 @@ header > p:last-child {
 .module-card[data-module='fluency'] { border-top: 6px solid #ffc44d; }
 .module-card[data-module='fractions'] { border-top: 6px solid #42c9bd; }
 .module-card[data-module='decimals'] {
-    grid-column: 2 / span 2;
     border-top: 6px solid #5b9df9;
 }
 .module-card[data-module='geometry'] { border-top: 6px solid #32b978; }
+.module-card[data-module='simplify-fractions'] { border-top: 6px solid #f08a5d; }
 
 .module-card.selected::after {
     content: 'Selected ✓';
@@ -768,6 +768,77 @@ header > p:last-child {
 .numeric-answer-input {
     appearance: none;
     -moz-appearance: textfield;
+}
+
+.fraction-answer-section {
+    width: min(100%, 300px);
+}
+
+.fraction-entry {
+    display: grid;
+    width: 130px;
+    grid-template-rows: 58px 4px 58px;
+    gap: 7px;
+}
+
+.fraction-entry-input {
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    color: var(--ink);
+    background: white;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.fraction-entry-input:focus {
+    border-color: var(--purple);
+    box-shadow: 0 0 0 4px rgba(102, 86, 217, 0.12);
+    outline: none;
+}
+
+.fraction-entry-divider {
+    display: block;
+    width: 100%;
+    height: 4px;
+    background: var(--ink);
+    border-radius: 2px;
+}
+
+.simplify-fraction-panel {
+    display: flex;
+    min-height: 230px;
+    padding: 26px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 17px;
+    background: linear-gradient(135deg, #fff5ec, #f1efff);
+    border: 2px solid #f2c5aa;
+    border-radius: 18px;
+}
+
+.simplify-badge {
+    color: #9a471d;
+    background: #ffe0ce;
+}
+
+.fraction-label.simplify-prompt {
+    width: 100px;
+    font-size: 2.65rem;
+    line-height: 1;
+}
+
+.fraction-label.simplify-prompt span:first-child {
+    padding-bottom: 8px;
+    border-bottom-width: 4px;
+}
+
+.fraction-label.simplify-prompt span:last-child {
+    padding-top: 8px;
 }
 
 .fraction-model {

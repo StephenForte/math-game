@@ -5,8 +5,9 @@ A friendly, browser-based collection of short math quizzes. Every quiz is define
 1. **Times Table Practice** — multi-digit multiplication at a rising 5th-grade level (2-digit × 1-to-2-digit by default), with adjustable difficulty.
 2. **Fluency Sprint** — twelve mixed multiplication and exact-division facts using factors 2–12, with a focused 15-second pace.
 3. **Fraction Equivalence Lab** — eight untimed questions that use fraction bars and number lines to make equivalent amounts visible.
-4. **Place Value & Rounding** — the legacy twenty-question challenge covering place values from millions through thousandths plus rounding to whole numbers, tenths, and hundredths.
-5. **Geometry Lab** — the legacy ten-question challenge covering polygons, lines, rays, line segments, and angles in capital letters.
+4. **Simplify Fractions Sprint** — twenty worksheet-based problems with an untimed baseline round followed by a personalized 5–7 minute goal.
+5. **Place Value & Rounding** — the legacy twenty-question challenge covering place values from millions through thousandths plus rounding to whole numbers, tenths, and hundredths.
+6. **Geometry Lab** — the legacy ten-question challenge covering polygons, lines, rays, line segments, and angles in capital letters.
 
 ## How to run
 
@@ -72,9 +73,15 @@ Common fields in a quiz config block:
     `factorA` / `factorB` ranges (`{ "min": …, "max": … }`). Division is always
     built from a product, so answers stay whole.
   - `fractions` — `seeds` (starting fractions) and `maxDenominator`.
+  - `simplifyFractions` — a worksheet-style `problems` pool of proper fractions,
+    optionally mixed with generated reducible fractions using
+    `generatedProblemChance` and the `generated...` difficulty limits.
   - `decimals` — `places` to ask about and a `rounding` mix.
   - `list` — a fixed `questions` array of multiple-choice items.
 - `correctFeedback` — the encouraging messages shown on a correct answer.
+- `timingMode: "baseline-then-goal"` — times the first completed round, then
+  creates a personalized countdown constrained by `goalMinSeconds` and
+  `goalMaxSeconds`.
 
 For example, to make **Times Table Practice** harder, open
 `quizzes/multiplication.md` and raise the factor ranges (e.g. set `factorB` to

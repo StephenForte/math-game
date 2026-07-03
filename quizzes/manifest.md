@@ -12,6 +12,7 @@ No code changes or rebuilds are needed — just edit Markdown and reload the pag
     "multiplication.md",
     "fluency.md",
     "fractions.md",
+    "simplify-fractions.md",
     "decimals.md",
     "geometry.md"
   ]
