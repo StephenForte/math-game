@@ -464,12 +464,100 @@ function generateListProblem(config, moduleState) {
 }
 
 // ---------------------------------------------------------------------------
+// Engine: simplify proper fractions to lowest terms
+// ---------------------------------------------------------------------------
+
+function greatestCommonDivisor(a, b) {
+    let left = Math.abs(a);
+    let right = Math.abs(b);
+    while (right) {
+        [left, right] = [right, left % right];
+    }
+    return left || 1;
+}
+
+function parseFractionProblem(problem) {
+    if (Array.isArray(problem) && problem.length === 2) return problem.map(Number);
+    const match = String(problem).trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (!match) throw new Error(`Invalid simplify-fractions problem: ${problem}`);
+    return [Number(match[1]), Number(match[2])];
+}
+
+function createGeneratedSimplifyFraction(config, usedFractions) {
+    const maxDenominator = config.generatedMaxDenominator || 120;
+    const maxSimpleDenominator = config.generatedMaxSimpleDenominator || 12;
+    const minMultiplier = config.generatedMinMultiplier || 2;
+    const maxMultiplier = config.generatedMaxMultiplier || 10;
+
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const simpleDenominator = randomInt(2, maxSimpleDenominator);
+        const simpleNumerator = randomInt(1, simpleDenominator - 1);
+        if (greatestCommonDivisor(simpleNumerator, simpleDenominator) !== 1) continue;
+
+        const allowedMultiplier = Math.min(maxMultiplier, Math.floor(maxDenominator / simpleDenominator));
+        if (allowedMultiplier < minMultiplier) continue;
+        const multiplier = randomInt(minMultiplier, allowedMultiplier);
+        const fraction = `${simpleNumerator * multiplier}/${simpleDenominator * multiplier}`;
+        if (!usedFractions.has(fraction)) return parseFractionProblem(fraction);
+    }
+    return null;
+}
+
+function generateSimplifyFractionsProblem(config, moduleState) {
+    const sourceProblems = Array.isArray(config.problems) ? config.problems : [];
+    if (!sourceProblems.length) throw new Error('Simplify Fractions needs a non-empty "problems" list.');
+    if (!moduleState.usedFractions) moduleState.usedFractions = new Set();
+    if (!moduleState.deck || !moduleState.deck.length) {
+        const uniqueProblems = [...new Set(sourceProblems.map(problem => String(problem).replace(/\s/g, '')))];
+        moduleState.deck = shuffle(uniqueProblems);
+    }
+
+    const generatedChance = Math.max(0, Math.min(1, config.generatedProblemChance || 0));
+    let fraction = Math.random() < generatedChance
+        ? createGeneratedSimplifyFraction(config, moduleState.usedFractions)
+        : null;
+
+    while (!fraction && moduleState.deck.length) {
+        const candidate = parseFractionProblem(moduleState.deck.shift());
+        if (!moduleState.usedFractions.has(`${candidate[0]}/${candidate[1]}`)) fraction = candidate;
+    }
+    if (!fraction) fraction = createGeneratedSimplifyFraction(config, moduleState.usedFractions);
+    if (!fraction) throw new Error('Simplify Fractions could not create another unique problem.');
+
+    const [numerator, denominator] = fraction;
+    if (numerator <= 0 || denominator <= 0 || numerator >= denominator) {
+        throw new Error(`Simplify Fractions expects a proper positive fraction, received ${numerator}/${denominator}.`);
+    }
+    moduleState.usedFractions.add(`${numerator}/${denominator}`);
+    const divisor = greatestCommonDivisor(numerator, denominator);
+    const simpleNumerator = numerator / divisor;
+    const simpleDenominator = denominator / divisor;
+    const answer = `${simpleNumerator}/${simpleDenominator}`;
+
+    return {
+        answer,
+        answerLabel: answer,
+        questionText: `Simplify ${numerator}/${denominator} to lowest terms.`,
+        promptHtml: `
+            <div class="simplify-fraction-panel">
+                <span class="question-badge simplify-badge">Lowest Terms</span>
+                <p class="problem-instruction">Simplify this fraction completely.</p>
+                <span class="fraction-label simplify-prompt" aria-label="${numerator} over ${denominator}">
+                    <span>${numerator}</span><span>${denominator}</span>
+                </span>
+            </div>
+        `
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Engine registry — Markdown configs select one of these by name.
 // ---------------------------------------------------------------------------
 
 const ENGINES = {
     arithmetic: generateArithmeticProblem,
     fractions: (config) => generateFractionProblem(config),
+    simplifyFractions: generateSimplifyFractionsProblem,
     decimals: generateDecimalProblem,
     list: generateListProblem
 };
@@ -584,6 +672,10 @@ class MathGame {
         this.moduleGrid = document.getElementById('module-grid');
         this.answerInput = document.getElementById('answer-input');
         this.numericAnswerSection = document.getElementById('numeric-answer-section');
+        this.fractionAnswerSection = document.getElementById('fraction-answer-section');
+        this.fractionNumeratorInput = document.getElementById('fraction-numerator');
+        this.fractionDenominatorInput = document.getElementById('fraction-denominator');
+        this.fractionSubmitBtn = document.getElementById('fraction-submit-btn');
         this.choiceAnswerSection = document.getElementById('choice-answer-section');
         this.problemContent = document.getElementById('problem-content');
         this.timeLeftElement = document.getElementById('time-left');
@@ -636,6 +728,7 @@ class MathGame {
     bindEvents() {
         this.startBtn.addEventListener('click', () => this.startGame());
         this.submitBtn.addEventListener('click', () => this.checkAnswer());
+        this.fractionSubmitBtn.addEventListener('click', () => this.checkAnswer());
         this.playAgainBtn.addEventListener('click', () => this.startGame());
         this.backToMenuBtn.addEventListener('click', () => this.showStartScreen());
         this.pauseBtn.addEventListener('click', () => this.togglePause());
@@ -644,6 +737,11 @@ class MathGame {
 
         this.answerInput.addEventListener('keydown', event => {
             if (event.key === 'Enter') this.checkAnswer();
+        });
+        [this.fractionNumeratorInput, this.fractionDenominatorInput].forEach(input => {
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Enter') this.checkAnswer();
+            });
         });
         this.playerNameInput.addEventListener('keydown', event => {
             if (event.key === 'Enter') this.startGame();
@@ -675,6 +773,55 @@ class MathGame {
         this.showScreen('start-screen');
     }
 
+    getBaselineStorageKey() {
+        return this.module.config.baselineStorageKey || `math-practice-baseline-${this.module.id}`;
+    }
+
+    getBaselineRecord() {
+        if (this.module.config.timingMode !== 'baseline-then-goal') return null;
+        try {
+            return JSON.parse(localStorage.getItem(this.getBaselineStorageKey()));
+        } catch {
+            return null;
+        }
+    }
+
+    configureSessionTiming() {
+        const isAdaptive = this.module.config.timingMode === 'baseline-then-goal';
+        const baseline = isAdaptive ? this.getBaselineRecord() : null;
+        this.isBaselineRound = isAdaptive && !baseline?.targetSeconds;
+        this.baselineRecord = baseline;
+        this.elapsedTime = 0;
+        this.effectiveOverallTimeLimit = baseline?.targetSeconds || this.module.overallTimeLimit || null;
+        this.timeLeft = this.effectiveOverallTimeLimit || this.module.timeLimit || 0;
+    }
+
+    saveBaselineResult(totalTime) {
+        if (!this.isBaselineRound || this.totalAttempts < this.module.maxProblems) return null;
+        const minimum = this.module.config.goalMinSeconds || 300;
+        const maximum = this.module.config.goalMaxSeconds || 420;
+        const increment = this.module.config.goalRoundingSeconds || 30;
+        const rounded = Math.round(totalTime / increment) * increment;
+        const targetSeconds = Math.min(maximum, Math.max(minimum, rounded));
+        const record = {
+            baselineSeconds: Number(totalTime.toFixed(1)),
+            targetSeconds,
+            completedAt: new Date().toISOString()
+        };
+        try {
+            localStorage.setItem(this.getBaselineStorageKey(), JSON.stringify(record));
+        } catch (error) {
+            console.warn('Could not save the baseline timing result.', error);
+        }
+        this.baselineRecord = record;
+        return record;
+    }
+
+    formatClock(seconds) {
+        const wholeSeconds = Math.max(0, Math.round(seconds));
+        return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, '0')}`;
+    }
+
     startGame() {
         const nameInput = this.playerNameInput.value.trim();
         if (!nameInput) {
@@ -704,7 +851,7 @@ class MathGame {
         this.totalAttempts = 0;
         this.currentProblem = null;
         this.currentProblemNumber = 1;
-        this.timeLeft = this.module?.overallTimeLimit || this.module?.timeLimit || 0;
+        this.configureSessionTiming();
         this.gameActive = false;
         this.isPaused = false;
         this.playerName = this.playerName || '';
@@ -722,6 +869,8 @@ class MathGame {
         this.updateProblemCounter();
         this.clearFeedback();
         this.answerInput.value = '';
+        this.fractionNumeratorInput.value = '';
+        this.fractionDenominatorInput.value = '';
         this.setAnswerControlsDisabled(false);
         this.pauseBtn.textContent = '⏸️ Pause';
         this.pauseBtn.disabled = false;
@@ -745,16 +894,22 @@ class MathGame {
         this.renderAnswerControls();
         this.problemStartTime = Date.now();
         this.clearFeedback();
-        if (!this.module.overallTimeLimit) this.timeLeft = this.module.timeLimit || 0;
+        if (!this.effectiveOverallTimeLimit && !this.isBaselineRound) {
+            this.timeLeft = this.module.timeLimit || 0;
+        }
         this.updateTimer();
         if (!this.timer) this.startTimer();
     }
 
     renderAnswerControls() {
         const usesChoices = this.module.inputType === 'choice';
-        this.numericAnswerSection.hidden = usesChoices;
+        const usesFractionEntry = this.module.inputType === 'fraction';
+        this.numericAnswerSection.hidden = usesChoices || usesFractionEntry;
+        this.fractionAnswerSection.hidden = !usesFractionEntry;
         this.choiceAnswerSection.hidden = !usesChoices;
         this.answerInput.value = '';
+        this.fractionNumeratorInput.value = '';
+        this.fractionDenominatorInput.value = '';
         this.choiceAnswerSection.innerHTML = '';
         this.choiceAnswerSection.className = 'choice-grid';
         if (this.currentProblem.choiceLayout) {
@@ -773,6 +928,8 @@ class MathGame {
                 button.addEventListener('click', () => this.checkAnswer(choice.value));
                 this.choiceAnswerSection.appendChild(button);
             });
+        } else if (usesFractionEntry) {
+            this.fractionNumeratorInput.focus();
         } else {
             this.answerInput.focus();
         }
@@ -780,7 +937,21 @@ class MathGame {
 
     checkAnswer(choiceValue = null) {
         if (!this.gameActive || !this.currentProblem || this.isPaused) return;
-        const rawAnswer = choiceValue ?? this.answerInput.value;
+        let rawAnswer = choiceValue ?? this.answerInput.value;
+        if (this.module.inputType === 'fraction') {
+            const numerator = parseNumericAnswer(this.fractionNumeratorInput.value);
+            const denominator = parseNumericAnswer(this.fractionDenominatorInput.value);
+            if (
+                numerator === null || denominator === null
+                || !Number.isInteger(numerator) || !Number.isInteger(denominator)
+                || numerator <= 0 || denominator <= 0
+            ) {
+                this.showFeedback('Enter a positive whole number above and below the fraction bar.', 'paused');
+                this.fractionNumeratorInput.focus();
+                return;
+            }
+            rawAnswer = `${numerator}/${denominator}`;
+        }
         if (rawAnswer === '') {
             this.showFeedback('Enter an answer first.', 'paused');
             this.answerInput.focus();
@@ -804,7 +975,7 @@ class MathGame {
 
     completeProblem(isCorrect, timedOut = false, userAnswer = null) {
         if (!this.gameActive || !this.currentProblem) return;
-        if (!this.module.overallTimeLimit) {
+        if (!this.effectiveOverallTimeLimit && !this.isBaselineRound) {
             clearInterval(this.timer);
             this.timer = null;
         }
@@ -860,13 +1031,18 @@ class MathGame {
 
     startTimer() {
         clearInterval(this.timer);
-        if (!this.module.timeLimit && !this.module.overallTimeLimit) return;
+        if (!this.module.timeLimit && !this.effectiveOverallTimeLimit && !this.isBaselineRound) return;
         this.timer = setInterval(() => {
             if (this.isPaused) return;
+            if (this.isBaselineRound) {
+                this.elapsedTime++;
+                this.updateTimer();
+                return;
+            }
             this.timeLeft--;
             this.updateTimer();
             if (this.timeLeft <= 0) {
-                if (this.module.overallTimeLimit) this.endGame();
+                if (this.effectiveOverallTimeLimit) this.endGame();
                 else this.completeProblem(false, true, null);
             }
         }, 1000);
@@ -875,6 +1051,9 @@ class MathGame {
     setAnswerControlsDisabled(disabled) {
         this.answerInput.disabled = disabled;
         this.submitBtn.disabled = disabled;
+        this.fractionNumeratorInput.disabled = disabled;
+        this.fractionDenominatorInput.disabled = disabled;
+        this.fractionSubmitBtn.disabled = disabled;
         this.choiceAnswerSection.querySelectorAll('button').forEach(button => {
             button.disabled = disabled;
         });
@@ -892,6 +1071,7 @@ class MathGame {
         } else {
             this.clearFeedback();
             if (this.module.inputType === 'number') this.answerInput.focus();
+            if (this.module.inputType === 'fraction') this.fractionNumeratorInput.focus();
         }
     }
 
@@ -918,9 +1098,15 @@ class MathGame {
         this.finalScoreElement.textContent = `${this.score} out of ${maxScore}`;
         this.problemsSolvedElement.textContent = `${this.problemsSolved}/${this.totalAttempts}`;
         this.accuracyElement.textContent = `${accuracy}%`;
-        this.totalTimeElement.textContent = `${totalTime.toFixed(1)}s`;
+        const newBaseline = this.saveBaselineResult(totalTime);
+        this.totalTimeElement.textContent = totalTime >= 60 ? this.formatClock(totalTime) : `${totalTime.toFixed(1)}s`;
         this.averageTimeElement.textContent = `${averageTime.toFixed(1)}s`;
         this.setResultMessage(accuracy);
+        if (newBaseline) {
+            this.resultMessageElement.textContent = `Baseline complete: 20 problems in ${this.formatClock(newBaseline.baselineSeconds)}. Your next practice goal is ${this.formatClock(newBaseline.targetSeconds)}.`;
+        } else if (this.baselineRecord?.targetSeconds) {
+            this.resultMessageElement.textContent += ` Practice goal: ${this.formatClock(this.baselineRecord.targetSeconds)}.`;
+        }
         this.renderAnswerReview();
         this.showScreen('result-screen');
         this.launchFireworks();
@@ -944,6 +1130,9 @@ class MathGame {
             totalTimeSeconds: Number(totalTime.toFixed(1)),
             averageTimeSeconds: Number(averageTime.toFixed(1)),
             completedModule: this.totalAttempts >= this.module.maxProblems,
+            timingRound: this.isBaselineRound ? 'baseline' : this.baselineRecord ? 'timed-practice' : 'standard',
+            baselineSeconds: newBaseline?.baselineSeconds || this.baselineRecord?.baselineSeconds || null,
+            goalSeconds: newBaseline?.targetSeconds || this.baselineRecord?.targetSeconds || null,
             answers: this.answerHistory
         });
     }
@@ -1093,13 +1282,15 @@ class MathGame {
     }
 
     updateTimer() {
-        const isTimed = Boolean(this.module?.timeLimit || this.module?.overallTimeLimit);
-        const isOverallTimer = Boolean(this.module?.overallTimeLimit);
+        const isTimed = Boolean(this.module?.timeLimit || this.effectiveOverallTimeLimit || this.isBaselineRound);
+        const isOverallTimer = Boolean(this.effectiveOverallTimeLimit);
         this.timerDisplay.hidden = !isTimed;
-        this.timeLeftElement.textContent = isOverallTimer
-            ? `${Math.floor(this.timeLeft / 60)}:${String(this.timeLeft % 60).padStart(2, '0')}`
-            : `${this.timeLeft}s`;
-        this.timerDisplay.classList.toggle('warning', isTimed && this.timeLeft <= (isOverallTimer ? 20 : 5));
+        this.timeLeftElement.textContent = this.isBaselineRound
+            ? `Baseline ${this.formatClock(this.elapsedTime)}`
+            : isOverallTimer
+                ? `Goal ${this.formatClock(this.timeLeft)}`
+                : `${this.timeLeft}s`;
+        this.timerDisplay.classList.toggle('warning', !this.isBaselineRound && isTimed && this.timeLeft <= (isOverallTimer ? 20 : 5));
     }
 
     updatePlayerDisplay() {

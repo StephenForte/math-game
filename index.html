@@ -98,6 +98,17 @@
                         <button id="submit-btn" class="btn btn-primary" type="button">Submit Answer</button>
                     </div>
 
+                    <div id="fraction-answer-section" class="answer-section fraction-answer-section" hidden>
+                        <div class="fraction-entry" aria-label="Enter the fraction in lowest terms">
+                            <label class="sr-only" for="fraction-numerator">Simplified numerator</label>
+                            <input type="text" id="fraction-numerator" class="fraction-entry-input" aria-label="Simplified numerator" placeholder="Top" inputmode="numeric" pattern="[0-9]*" autocomplete="off" spellcheck="false">
+                            <span class="fraction-entry-divider" aria-hidden="true"></span>
+                            <label class="sr-only" for="fraction-denominator">Simplified denominator</label>
+                            <input type="text" id="fraction-denominator" class="fraction-entry-input" aria-label="Simplified denominator" placeholder="Bottom" inputmode="numeric" pattern="[0-9]*" autocomplete="off" spellcheck="false">
+                        </div>
+                        <button id="fraction-submit-btn" class="btn btn-primary" type="button">Submit Fraction</button>
+                    </div>
+
                     <div id="choice-answer-section" class="choice-grid" aria-label="Answer choices"></div>
                     <div id="feedback" class="feedback" role="status" aria-live="assertive"></div>
                 </div>
