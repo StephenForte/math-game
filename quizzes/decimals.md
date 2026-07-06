@@ -11,6 +11,8 @@ is a timed overall challenge: the whole session shares one countdown.
   are `whole` (nearest whole number), `tenth`, and `hundredth`.
 - `overallTimeLimit` is the total seconds for the whole session. `maxProblems`
   sets how many questions are drawn from the deck.
+- The deck preserves the configured mix and regenerates any exact question
+  collision, so a session does not repeat a prompt.
 
 ```json
 {

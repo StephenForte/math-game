@@ -129,13 +129,41 @@ function buildModule(config, file) {
 
 const ARITHMETIC_SIGNS = { multiply: '×', divide: '÷', add: '+', subtract: '−' };
 
-function generateArithmeticProblem(config, moduleState) {
+function arithmeticCandidateKey(operation, a, b) {
+    if (operation === 'multiply' || operation === 'add' || operation === 'subtract') {
+        return `${operation}:${Math.min(a, b)}:${Math.max(a, b)}`;
+    }
+    return `${operation}:${a}:${b}`;
+}
+
+function buildArithmeticDeck(config) {
     const operations = config.operations && config.operations.length ? config.operations : ['multiply'];
-    const operation = randomItem(operations);
     const rangeA = config.factorA || { min: 2, max: 12 };
     const rangeB = config.factorB || { min: 2, max: 12 };
-    let a = randomInt(rangeA.min, rangeA.max);
-    let b = randomInt(rangeB.min, rangeB.max);
+    const seen = new Set();
+    const candidates = [];
+
+    for (const operation of operations) {
+        for (let a = rangeA.min; a <= rangeA.max; a++) {
+            for (let b = rangeB.min; b <= rangeB.max; b++) {
+                const key = arithmeticCandidateKey(operation, a, b);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                candidates.push({ operation, a, b });
+            }
+        }
+    }
+    return shuffle(candidates);
+}
+
+function generateArithmeticProblem(config, moduleState) {
+    if (!moduleState.arithmeticDeck || !moduleState.arithmeticDeck.length) {
+        moduleState.arithmeticDeck = buildArithmeticDeck(config);
+    }
+    const candidate = moduleState.arithmeticDeck.shift();
+    if (!candidate) throw new Error('Arithmetic quiz has no facts in its configured ranges.');
+    const { operation } = candidate;
+    let { a, b } = candidate;
 
     let left = a;
     let right = b;
@@ -197,10 +225,13 @@ function numberLine(numerator, denominator) {
     return `<div class="number-line" aria-label="Point at ${numerator} over ${denominator} on a number line">${ticks}</div>`;
 }
 
-function generateFractionProblem(config) {
+function generateFractionProblem(config, moduleState) {
     const seeds = Array.isArray(config.seeds) && config.seeds.length ? config.seeds : DEFAULT_FRACTION_SEEDS;
     const maxDenominator = config.maxDenominator || 12;
-    const [numerator, denominator] = seeds[randomInt(0, seeds.length - 1)];
+    if (!moduleState.seedDeck || !moduleState.seedDeck.length) {
+        moduleState.seedDeck = shuffle(seeds);
+    }
+    const [numerator, denominator] = moduleState.seedDeck.shift();
     const maxMultiplier = Math.max(2, Math.min(4, Math.floor(maxDenominator / denominator)));
     const multiplier = randomInt(2, maxMultiplier);
     const equivalent = [numerator * multiplier, denominator * multiplier];
@@ -398,9 +429,18 @@ function generateRoundingProblem(roundTo) {
 function generateDecimalProblem(config, moduleState) {
     if (!moduleState.deck || !moduleState.deck.length) moduleState.deck = buildDecimalDeck(config);
     const question = moduleState.deck.shift();
-    return question.kind === 'place-value'
-        ? generatePlaceValueProblem(question.type, config.places)
-        : generateRoundingProblem(question.roundTo);
+    if (!moduleState.usedQuestionTexts) moduleState.usedQuestionTexts = new Set();
+
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const problem = question.kind === 'place-value'
+            ? generatePlaceValueProblem(question.type, config.places)
+            : generateRoundingProblem(question.roundTo);
+        if (!moduleState.usedQuestionTexts.has(problem.questionText)) {
+            moduleState.usedQuestionTexts.add(problem.questionText);
+            return problem;
+        }
+    }
+    throw new Error('Place Value & Rounding could not create another unique question.');
 }
 
 // ---------------------------------------------------------------------------
@@ -556,7 +596,7 @@ function generateSimplifyFractionsProblem(config, moduleState) {
 
 const ENGINES = {
     arithmetic: generateArithmeticProblem,
-    fractions: (config) => generateFractionProblem(config),
+    fractions: generateFractionProblem,
     simplifyFractions: generateSimplifyFractionsProblem,
     decimals: generateDecimalProblem,
     list: generateListProblem

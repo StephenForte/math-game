@@ -17,7 +17,8 @@ a `min` and `max`.
   how many questions a session has with `maxProblems`.
 
 The current defaults give 2-digit × 1-to-2-digit multiplication, which is a solid
-rising-5th-grade level.
+rising-5th-grade level. Facts are shuffled and used without replacement, so a
+session will not repeat a multiplication problem.
 
 ```json
 {

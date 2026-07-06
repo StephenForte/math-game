@@ -11,6 +11,8 @@ Build automatic recall with mixed multiplication and exact division. Edit the
 - `factorA` / `factorB` set the size of the numbers (for division they become the
   two factors whose product is divided).
 - `timeLimit` is the seconds allowed per question — lower it for a faster sprint.
+- The configured fact pool is shuffled and used without replacement. Reversed
+  multiplication facts such as `7 × 8` and `8 × 7` count as the same fact.
 
 ```json
 {
