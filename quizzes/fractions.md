@@ -5,8 +5,9 @@ is intentionally untimed so the learner can reason from the visual model.
 
 ## How to adjust difficulty
 
-- `seeds` is the list of starting fractions (`[numerator, denominator]`). Add or
-  remove pairs to focus on particular fractions.
+- `seeds` is the list of starting fractions (`[numerator, denominator]`). Seeds
+  are shuffled and used once before any repeat. Add or remove pairs to focus on
+  particular fractions.
 - `maxDenominator` caps how large an equivalent fraction can get. Raise it for
   harder comparisons, lower it for gentler ones.
 - `maxProblems` sets how many questions a session has.
