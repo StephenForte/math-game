@@ -1,119 +1,29 @@
 /**
  * Tests for script.js - Math Practice Lab engine and generators.
  *
- * Since the original script.js uses global scope, we extract and test
- * the core logic functions by evaluating them in isolation.
+ * Loads the real script.js into jsdom so these assertions exercise the
+ * production helpers (via MathPracticeHelpers), not a local reimplementation.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, it, expect, beforeAll } from 'vitest';
 
-// ============================================================================
-// Utility Functions (copied from script.js for isolated testing)
-// ============================================================================
+const rootDir = dirname(fileURLToPath(import.meta.url));
 
-function randomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+beforeAll(() => {
+    const source = readFileSync(join(rootDir, 'script.js'), 'utf8');
+    // Classic script: evaluate in the jsdom window so function declarations bind globally.
+    window.eval(source);
+});
 
-function randomItem(items) {
-    return items[randomInt(0, items.length - 1)];
-}
-
-function shuffle(items) {
-    const result = [...items];
-    for (let index = result.length - 1; index > 0; index--) {
-        const target = Math.floor(Math.random() * (index + 1));
-        [result[index], result[target]] = [result[target], result[index]];
+function helpers() {
+    const api = globalThis.MathPracticeHelpers;
+    if (!api) {
+        throw new Error('MathPracticeHelpers was not exported by script.js');
     }
-    return result;
-}
-
-function parseNumericAnswer(raw) {
-    const trimmed = String(raw).trim();
-    if (!trimmed || !/^-?\d+$/.test(trimmed)) return null;
-    return Number(trimmed);
-}
-
-function extractConfig(markdown, sourceName) {
-    const match = markdown.match(/```(?:json|config)\s*\n([\s\S]*?)```/);
-    if (!match) {
-        throw new Error(`No \`\`\`json config block found in ${sourceName}.`);
-    }
-    try {
-        return JSON.parse(match[1]);
-    } catch (error) {
-        throw new Error(`Could not parse the config block in ${sourceName}: ${error.message}`);
-    }
-}
-
-function greatestCommonDivisor(a, b) {
-    let left = Math.abs(a);
-    let right = Math.abs(b);
-    while (right) {
-        [left, right] = [right, left % right];
-    }
-    return left || 1;
-}
-
-function parseFractionProblem(problem) {
-    if (Array.isArray(problem) && problem.length === 2) return problem.map(Number);
-    const match = String(problem).trim().match(/^(\d+)\s*\/\s*(\d+)$/);
-    if (!match) throw new Error(`Invalid simplify-fractions problem: ${problem}`);
-    return [Number(match[1]), Number(match[2])];
-}
-
-function fractionKey(numerator, denominator) {
-    return `${numerator}/${denominator}`;
-}
-
-// Rounding utilities
-function generateRoundingNumber() {
-    const digits = randomInt(1, 3);
-    const whole = digits === 1 ? randomInt(1, 9) : digits === 2 ? randomInt(10, 99) : randomInt(100, 999);
-    return { whole, d1: randomInt(0, 9), d2: randomInt(0, 9), d3: randomInt(1, 9) };
-}
-
-function computeRounded({ whole, d1, d2, d3 }, roundTo) {
-    const thousandths = whole * 1000 + d1 * 100 + d2 * 10 + d3;
-    if (roundTo === 'whole number') {
-        return String(Math.floor(thousandths / 1000) + (thousandths % 1000 >= 500 ? 1 : 0));
-    }
-    if (roundTo === 'tenth') {
-        const tenths = Math.floor(thousandths / 100) + (thousandths % 100 >= 50 ? 1 : 0);
-        return `${Math.floor(tenths / 10)}.${tenths % 10}`;
-    }
-    const hundredths = Math.floor(thousandths / 10) + (thousandths % 10 >= 5 ? 1 : 0);
-    return `${Math.floor(hundredths / 100)}.${String(hundredths % 100).padStart(2, '0')}`;
-}
-
-// Arithmetic utilities
-const ARITHMETIC_SIGNS = { multiply: '×', divide: '÷', add: '+', subtract: '−' };
-
-function arithmeticCandidateKey(operation, a, b) {
-    if (operation === 'multiply' || operation === 'add' || operation === 'subtract') {
-        return `${operation}:${Math.min(a, b)}:${Math.max(a, b)}`;
-    }
-    return `${operation}:${a}:${b}`;
-}
-
-function buildArithmeticDeck(config) {
-    const operations = config.operations && config.operations.length ? config.operations : ['multiply'];
-    const rangeA = config.factorA || { min: 2, max: 12 };
-    const rangeB = config.factorB || { min: 2, max: 12 };
-    const seen = new Set();
-    const candidates = [];
-
-    for (const operation of operations) {
-        for (let a = rangeA.min; a <= rangeA.max; a++) {
-            for (let b = rangeB.min; b <= rangeB.max; b++) {
-                const key = arithmeticCandidateKey(operation, a, b);
-                if (seen.has(key)) continue;
-                seen.add(key);
-                candidates.push({ operation, a, b });
-            }
-        }
-    }
-    return shuffle(candidates);
+    return api;
 }
 
 // ============================================================================
@@ -122,6 +32,7 @@ function buildArithmeticDeck(config) {
 
 describe('randomInt', () => {
     it('returns values within the specified range', () => {
+        const { randomInt } = helpers();
         for (let i = 0; i < 100; i++) {
             const value = randomInt(5, 10);
             expect(value).toBeGreaterThanOrEqual(5);
@@ -130,6 +41,7 @@ describe('randomInt', () => {
     });
 
     it('returns integer values', () => {
+        const { randomInt } = helpers();
         for (let i = 0; i < 50; i++) {
             const value = randomInt(1, 100);
             expect(Number.isInteger(value)).toBe(true);
@@ -137,10 +49,12 @@ describe('randomInt', () => {
     });
 
     it('handles single-value range', () => {
+        const { randomInt } = helpers();
         expect(randomInt(7, 7)).toBe(7);
     });
 
     it('handles negative ranges', () => {
+        const { randomInt } = helpers();
         for (let i = 0; i < 50; i++) {
             const value = randomInt(-10, -5);
             expect(value).toBeGreaterThanOrEqual(-10);
@@ -151,6 +65,7 @@ describe('randomInt', () => {
 
 describe('randomItem', () => {
     it('returns an item from the array', () => {
+        const { randomItem } = helpers();
         const items = ['a', 'b', 'c', 'd'];
         for (let i = 0; i < 50; i++) {
             expect(items).toContain(randomItem(items));
@@ -158,24 +73,28 @@ describe('randomItem', () => {
     });
 
     it('works with single-item array', () => {
+        const { randomItem } = helpers();
         expect(randomItem(['only'])).toBe('only');
     });
 });
 
 describe('shuffle', () => {
     it('returns array of same length', () => {
+        const { shuffle } = helpers();
         const original = [1, 2, 3, 4, 5];
         const shuffled = shuffle(original);
         expect(shuffled).toHaveLength(original.length);
     });
 
     it('contains all original elements', () => {
+        const { shuffle } = helpers();
         const original = [1, 2, 3, 4, 5];
         const shuffled = shuffle(original);
         expect(shuffled.sort()).toEqual(original.sort());
     });
 
     it('does not mutate original array', () => {
+        const { shuffle } = helpers();
         const original = [1, 2, 3, 4, 5];
         const copy = [...original];
         shuffle(original);
@@ -183,37 +102,44 @@ describe('shuffle', () => {
     });
 
     it('handles empty array', () => {
+        const { shuffle } = helpers();
         expect(shuffle([])).toEqual([]);
     });
 
     it('handles single-element array', () => {
+        const { shuffle } = helpers();
         expect(shuffle([42])).toEqual([42]);
     });
 });
 
 describe('parseNumericAnswer', () => {
     it('parses positive integers', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('42')).toBe(42);
         expect(parseNumericAnswer('0')).toBe(0);
         expect(parseNumericAnswer('123')).toBe(123);
     });
 
     it('parses negative integers', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('-5')).toBe(-5);
         expect(parseNumericAnswer('-123')).toBe(-123);
     });
 
     it('trims whitespace', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('  42  ')).toBe(42);
         expect(parseNumericAnswer('\t5\n')).toBe(5);
     });
 
     it('returns null for empty input', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('')).toBe(null);
         expect(parseNumericAnswer('   ')).toBe(null);
     });
 
     it('returns null for non-numeric input', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('abc')).toBe(null);
         expect(parseNumericAnswer('12abc')).toBe(null);
         expect(parseNumericAnswer('12.5')).toBe(null);
@@ -221,12 +147,14 @@ describe('parseNumericAnswer', () => {
     });
 
     it('handles number input (coerces to string)', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer(42)).toBe(42);
     });
 });
 
 describe('extractConfig', () => {
     it('extracts JSON from ```json block', () => {
+        const { extractConfig } = helpers();
         const markdown = `# Title
 
 \`\`\`json
@@ -239,6 +167,7 @@ More content.`;
     });
 
     it('extracts JSON from ```config block', () => {
+        const { extractConfig } = helpers();
         const markdown = `\`\`\`config
 {"id": "test"}
 \`\`\``;
@@ -247,16 +176,19 @@ More content.`;
     });
 
     it('throws on missing config block', () => {
+        const { extractConfig } = helpers();
         const markdown = '# Just a title';
         expect(() => extractConfig(markdown, 'test.md')).toThrow(/No.*config block found/);
     });
 
     it('throws on invalid JSON', () => {
+        const { extractConfig } = helpers();
         const markdown = '```json\n{invalid}\n```';
         expect(() => extractConfig(markdown, 'test.md')).toThrow(/Could not parse/);
     });
 
     it('extracts first config block only', () => {
+        const { extractConfig } = helpers();
         const markdown = `\`\`\`json
 {"first": true}
 \`\`\`
@@ -271,54 +203,64 @@ More content.`;
 
 describe('greatestCommonDivisor', () => {
     it('finds GCD of positive numbers', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(12, 8)).toBe(4);
         expect(greatestCommonDivisor(48, 18)).toBe(6);
         expect(greatestCommonDivisor(100, 25)).toBe(25);
     });
 
     it('handles coprime numbers', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(7, 11)).toBe(1);
         expect(greatestCommonDivisor(8, 15)).toBe(1);
     });
 
     it('handles when one number divides the other', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(10, 5)).toBe(5);
         expect(greatestCommonDivisor(5, 10)).toBe(5);
     });
 
     it('handles negative numbers', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(-12, 8)).toBe(4);
         expect(greatestCommonDivisor(12, -8)).toBe(4);
         expect(greatestCommonDivisor(-12, -8)).toBe(4);
     });
 
     it('handles zero', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(0, 5)).toBe(5);
         expect(greatestCommonDivisor(5, 0)).toBe(5);
         expect(greatestCommonDivisor(0, 0)).toBe(1);  // Returns 1 as fallback
     });
 
     it('handles equal numbers', () => {
+        const { greatestCommonDivisor } = helpers();
         expect(greatestCommonDivisor(7, 7)).toBe(7);
     });
 });
 
 describe('parseFractionProblem', () => {
     it('parses string fraction notation', () => {
+        const { parseFractionProblem } = helpers();
         expect(parseFractionProblem('3/4')).toEqual([3, 4]);
         expect(parseFractionProblem('12/15')).toEqual([12, 15]);
     });
 
     it('handles whitespace in string', () => {
+        const { parseFractionProblem } = helpers();
         expect(parseFractionProblem('  3 / 4  ')).toEqual([3, 4]);
     });
 
     it('parses array notation', () => {
+        const { parseFractionProblem } = helpers();
         expect(parseFractionProblem([3, 4])).toEqual([3, 4]);
         expect(parseFractionProblem(['6', '8'])).toEqual([6, 8]);
     });
 
     it('throws on invalid format', () => {
+        const { parseFractionProblem } = helpers();
         expect(() => parseFractionProblem('invalid')).toThrow(/Invalid simplify-fractions problem/);
         expect(() => parseFractionProblem('3-4')).toThrow(/Invalid simplify-fractions problem/);
     });
@@ -326,6 +268,7 @@ describe('parseFractionProblem', () => {
 
 describe('fractionKey', () => {
     it('creates correct key format', () => {
+        const { fractionKey } = helpers();
         expect(fractionKey(3, 4)).toBe('3/4');
         expect(fractionKey(1, 2)).toBe('1/2');
         expect(fractionKey(12, 15)).toBe('12/15');
@@ -334,45 +277,53 @@ describe('fractionKey', () => {
 
 describe('computeRounded', () => {
     it('rounds to whole number correctly', () => {
+        const { computeRounded } = helpers();
         expect(computeRounded({ whole: 5, d1: 4, d2: 9, d3: 9 }, 'whole number')).toBe('5');
         expect(computeRounded({ whole: 5, d1: 5, d2: 0, d3: 1 }, 'whole number')).toBe('6');
         expect(computeRounded({ whole: 3, d1: 2, d2: 4, d3: 9 }, 'whole number')).toBe('3');
     });
 
     it('rounds to tenth correctly', () => {
+        const { computeRounded } = helpers();
         expect(computeRounded({ whole: 5, d1: 4, d2: 4, d3: 9 }, 'tenth')).toBe('5.4');
         expect(computeRounded({ whole: 5, d1: 4, d2: 5, d3: 1 }, 'tenth')).toBe('5.5');
         expect(computeRounded({ whole: 2, d1: 9, d2: 9, d3: 5 }, 'tenth')).toBe('3.0');
     });
 
     it('rounds to hundredth correctly', () => {
+        const { computeRounded } = helpers();
         expect(computeRounded({ whole: 5, d1: 4, d2: 5, d3: 4 }, 'hundredth')).toBe('5.45');
         expect(computeRounded({ whole: 5, d1: 4, d2: 5, d3: 5 }, 'hundredth')).toBe('5.46');
         expect(computeRounded({ whole: 1, d1: 2, d2: 3, d3: 4 }, 'hundredth')).toBe('1.23');
     });
 
     it('pads hundredths with leading zero', () => {
+        const { computeRounded } = helpers();
         expect(computeRounded({ whole: 1, d1: 0, d2: 4, d3: 5 }, 'hundredth')).toBe('1.05');
     });
 });
 
 describe('arithmeticCandidateKey', () => {
     it('normalizes multiply keys (commutative)', () => {
+        const { arithmeticCandidateKey } = helpers();
         expect(arithmeticCandidateKey('multiply', 3, 5)).toBe('multiply:3:5');
         expect(arithmeticCandidateKey('multiply', 5, 3)).toBe('multiply:3:5');
     });
 
     it('normalizes add keys (commutative)', () => {
+        const { arithmeticCandidateKey } = helpers();
         expect(arithmeticCandidateKey('add', 3, 5)).toBe('add:3:5');
         expect(arithmeticCandidateKey('add', 5, 3)).toBe('add:3:5');
     });
 
     it('normalizes subtract keys (commutative for deduplication)', () => {
+        const { arithmeticCandidateKey } = helpers();
         expect(arithmeticCandidateKey('subtract', 3, 5)).toBe('subtract:3:5');
         expect(arithmeticCandidateKey('subtract', 5, 3)).toBe('subtract:3:5');
     });
 
     it('preserves divide key order (non-commutative)', () => {
+        const { arithmeticCandidateKey } = helpers();
         expect(arithmeticCandidateKey('divide', 3, 5)).toBe('divide:3:5');
         expect(arithmeticCandidateKey('divide', 5, 3)).toBe('divide:5:3');
     });
@@ -380,6 +331,7 @@ describe('arithmeticCandidateKey', () => {
 
 describe('buildArithmeticDeck', () => {
     it('creates deck with default config', () => {
+        const { buildArithmeticDeck } = helpers();
         const config = {};
         const deck = buildArithmeticDeck(config);
 
@@ -390,6 +342,7 @@ describe('buildArithmeticDeck', () => {
     });
 
     it('respects custom factor ranges', () => {
+        const { buildArithmeticDeck } = helpers();
         const config = {
             operations: ['multiply'],
             factorA: { min: 2, max: 4 },
@@ -408,6 +361,7 @@ describe('buildArithmeticDeck', () => {
     });
 
     it('includes all specified operations', () => {
+        const { buildArithmeticDeck } = helpers();
         const config = {
             operations: ['add', 'subtract'],
             factorA: { min: 1, max: 3 },
@@ -421,6 +375,7 @@ describe('buildArithmeticDeck', () => {
     });
 
     it('removes duplicate commutative pairs', () => {
+        const { buildArithmeticDeck } = helpers();
         const config = {
             operations: ['multiply'],
             factorA: { min: 2, max: 3 },
@@ -435,6 +390,7 @@ describe('buildArithmeticDeck', () => {
 
 describe('generateRoundingNumber', () => {
     it('generates valid number structure', () => {
+        const { generateRoundingNumber } = helpers();
         for (let i = 0; i < 50; i++) {
             const num = generateRoundingNumber();
 
@@ -457,6 +413,7 @@ describe('generateRoundingNumber', () => {
 
 describe('Fraction simplification logic', () => {
     it('correctly identifies simplified fractions', () => {
+        const { greatestCommonDivisor } = helpers();
         // Test that GCD-based simplification works
         const testCases = [
             { num: 6, den: 8, simplified: [3, 4] },
@@ -477,6 +434,7 @@ describe('Fraction simplification logic', () => {
 
 describe('Edge cases', () => {
     it('shuffle handles large arrays', () => {
+        const { shuffle } = helpers();
         const large = Array.from({ length: 1000 }, (_, i) => i);
         const shuffled = shuffle(large);
         expect(shuffled).toHaveLength(1000);
@@ -484,6 +442,7 @@ describe('Edge cases', () => {
     });
 
     it('parseNumericAnswer handles edge numeric strings', () => {
+        const { parseNumericAnswer } = helpers();
         expect(parseNumericAnswer('0')).toBe(0);
         // Number('-0') is -0; Object.is treats -0 and +0 as distinct
         expect(Object.is(parseNumericAnswer('-0'), -0)).toBe(true);
@@ -492,6 +451,7 @@ describe('Edge cases', () => {
     });
 
     it('extractConfig handles complex JSON', () => {
+        const { extractConfig } = helpers();
         const markdown = `\`\`\`json
 {
     "id": "test",
@@ -505,5 +465,13 @@ describe('Edge cases', () => {
         const config = extractConfig(markdown, 'test.md');
         expect(config.nested.array).toEqual([1, 2, 3]);
         expect(config.unicode).toBe('αβγ');
+    });
+});
+
+describe('script.js load path', () => {
+    it('exposes helpers from the real script.js file', () => {
+        expect(globalThis.MathPracticeHelpers).toBeDefined();
+        expect(typeof globalThis.MathPracticeHelpers.shuffle).toBe('function');
+        expect(typeof globalThis.MathPracticeHelpers.buildArithmeticDeck).toBe('function');
     });
 });
