@@ -1,0 +1,27 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "A friendly, browser-based collection of short math quizzes. Every quiz is defined by a Markdown file in the `quizzes/` folder, so you can change difficulty, timing, and even add new quizzes without touching the JavaScript. The app currently includes these practice modules:",
+  "main": "admin.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:python": "python3 -m pytest test_serve.py -v",
+    "test:all": "npm run test:python && npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StephenForte/math-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/StephenForte/math-game/issues"
+  },
+  "homepage": "https://github.com/StephenForte/math-game#readme",
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.10"
+  }
+}

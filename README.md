@@ -100,6 +100,23 @@ For compatibility with existing Apps Script deployments, the learner's name is s
 
 The repository did not contain the previous endpoint or logging schema, so `config.js` intentionally leaves the deployment URL blank rather than guessing it.
 
+## Tests
+
+Python tests cover the local admin API in `serve.py` (path safety, config validation, and HTTP handlers). JavaScript tests cover shared quiz-engine helpers in `script.js` (parsing, shuffling, arithmetic decks, rounding, fractions).
+
+```sh
+# Python (serve.py)
+pip3 install -r requirements-dev.txt
+python3 -m pytest test_serve.py -v
+
+# JavaScript (script.js helpers)
+npm install
+npm test
+
+# Both
+npm run test:all
+```
+
 ## Project files
 
 - `index.html` — module picker, shared quiz interface, and results screen
@@ -108,4 +125,5 @@ The repository did not contain the previous endpoint or logging schema, so `conf
 - `config.js` — Google Sheets endpoint configuration
 - `google-apps-script.gs` — Sheet-bound result logger for Apps Script
 - `styles.css` — responsive styling and visual math models
+- `test_serve.py` / `script.test.js` — automated tests for the server and engine helpers
 - `README.md` — project overview and usage
