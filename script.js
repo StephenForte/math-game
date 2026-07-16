@@ -428,8 +428,9 @@ function generateRoundingProblem(roundTo) {
 
 function generateDecimalProblem(config, moduleState) {
     if (!moduleState.deck || !moduleState.deck.length) moduleState.deck = buildDecimalDeck(config);
-    const question = moduleState.deck.shift();
     if (!moduleState.usedQuestionTexts) moduleState.usedQuestionTexts = new Set();
+    const question = moduleState.deck[0];
+    if (!question) throw new Error('Place Value & Rounding quiz has an empty question deck.');
 
     for (let attempt = 0; attempt < 100; attempt++) {
         const problem = question.kind === 'place-value'
@@ -437,6 +438,7 @@ function generateDecimalProblem(config, moduleState) {
             : generateRoundingProblem(question.roundTo);
         if (!moduleState.usedQuestionTexts.has(problem.questionText)) {
             moduleState.usedQuestionTexts.add(problem.questionText);
+            moduleState.deck.shift();
             return problem;
         }
     }
