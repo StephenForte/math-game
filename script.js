@@ -1371,3 +1371,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         showLoadError(error);
     }
 });
+
+// Expose quiz-engine helpers for automated tests (and optional debugging).
+// Kept as a single object so classic <script> loading stays valid (no ESM exports).
+globalThis.MathPracticeHelpers = {
+    randomInt,
+    randomItem,
+    shuffle,
+    parseNumericAnswer,
+    extractConfig,
+    greatestCommonDivisor,
+    parseFractionProblem,
+    fractionKey,
+    generateRoundingNumber,
+    computeRounded,
+    arithmeticCandidateKey,
+    buildArithmeticDeck,
+};
